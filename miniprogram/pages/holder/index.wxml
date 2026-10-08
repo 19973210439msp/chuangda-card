@@ -1,0 +1,37 @@
+<nav-bar title="名片夹"></nav-bar>
+<scroll-view class="tab-scroll" scroll-y style="height: {{scrollHeight}}px">
+  <view class="tab-body">
+    <view class="error" wx:if="{{error}}">{{error}}</view>
+    <view class="empty" wx:if="{{!items.length && !error}}">还没有名片</view>
+    <view class="list" wx:if="{{items.length}}">
+      <view class="swipe" wx:for="{{items}}" wx:key="cardId">
+        <view class="actions">
+          <view class="act pin" data-id="{{item.cardId}}" data-pinned="{{item.pinned}}" catchtap="onPin">{{item.pinned ? '取消置顶' : '置顶'}}</view>
+          <view class="act del" data-id="{{item.cardId}}" catchtap="onDelete">删除</view>
+        </view>
+        <view
+          class="item {{item.pinned ? 'pinned' : ''}} {{item.dragging ? 'dragging' : ''}}"
+          style="transform: translateX({{item.offset}}px);"
+          data-index="{{index}}"
+          data-id="{{item.cardId}}"
+          bindtouchstart="onTouchStart"
+          bindtouchmove="onTouchMove"
+          bindtouchend="onTouchEnd"
+          bindtap="onOpen"
+        >
+          <view class="meta">
+            <text class="who">{{item.card.name || '未命名'}}</text>
+            <text class="sub">{{item.card.company}} {{item.card.title}}</text>
+            <text class="sub" wx:if="{{item.card.phone}}">{{item.card.phone}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</scroll-view>
+<view class="scan-dock">
+  <button class="scan" bindtap="onScan">
+    <image src="/assets/icons/camera.png" mode="aspectFit"></image>
+    <text>拍名片识别</text>
+  </button>
+</view>

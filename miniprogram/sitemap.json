@@ -1,0 +1,7 @@
+{
+  "desc": "创大产控电子名片",
+  "rules": [{
+    "action": "allow",
+    "page": "*"
+  }]
+}

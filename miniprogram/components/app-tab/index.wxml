@@ -1,0 +1,14 @@
+<view class="tabbar">
+  <view class="tab {{current === 'home' ? 'on' : ''}}" data-url="/pages/home/index" bindtap="onTab">
+    <image src="{{current === 'home' ? '/assets/tab-home-on.png' : '/assets/tab-home.png'}}" mode="aspectFit"></image>
+    <text>首页</text>
+  </view>
+  <view class="tab {{current === 'holder' ? 'on' : ''}}" data-url="/pages/holder/index" bindtap="onTab">
+    <image src="{{current === 'holder' ? '/assets/tab-holder-on.png' : '/assets/tab-holder.png'}}" mode="aspectFit"></image>
+    <text>名片夹</text>
+  </view>
+  <view class="tab {{current === 'mine' ? 'on' : ''}}" data-url="/pages/mine/index" bindtap="onTab">
+    <image src="{{current === 'mine' ? '/assets/tab-mine-on.png' : '/assets/tab-mine.png'}}" mode="aspectFit"></image>
+    <text>我的</text>
+  </view>
+</view>

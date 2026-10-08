@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "名片",
+  "usingComponents": {
+    "card-view": "/components/card-view/index"
+  }
+}

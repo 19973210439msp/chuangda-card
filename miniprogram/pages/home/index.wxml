@@ -1,0 +1,47 @@
+<nav-bar title="创大产控"></nav-bar>
+<scroll-view class="tab-scroll" scroll-y style="height: {{scrollHeight}}px">
+  <view class="tab-body">
+    <view class="card-wrap">
+      <card-view card="{{card}}" company="{{company}}" flipped="{{flipped}}"></card-view>
+      <view class="flip" bindtap="onFlip">{{flipped ? '正面' : '翻面'}}</view>
+      <view class="lite">
+      <view class="lite-item" bindtap="onEdit">
+        <image src="/assets/icons/edit-card.png" mode="aspectFit"></image>
+        <text>编辑</text>
+      </view>
+      <view class="lite-item">
+        <button class="lite-share" open-type="share" hover-class="none">
+          <image src="/assets/icons/forward.png" mode="aspectFit"></image>
+          <text>转发</text>
+        </button>
+      </view>
+      <view class="lite-item" bindtap="onCopy">
+        <image src="/assets/icons/link.png" mode="aspectFit"></image>
+        <text>复制链接</text>
+      </view>
+    </view>
+    </view>
+    <view class="error" wx:if="{{error}}">{{error}}</view>
+    <view class="guide" wx:if="{{needPhone}}" bindtap="onBindPhone">
+      <text class="guide-title">绑定手机号领取名片</text>
+      <text class="guide-desc">管理员导入资料后，绑定表格里的手机号即可同步到当前微信。</text>
+    </view>
+    <view class="guide" wx:if="{{needGuide}}" bindtap="onEdit">
+      <text class="guide-title">还未编辑名片</text>
+      <text class="guide-desc">点击完善姓名和联系方式，完成后即可转发。</text>
+    </view>
+    <text class="section" wx:if="{{summary}}">我的数据</text>
+    <view class="summary" wx:if="{{summary}}">
+      <view class="metric" bindtap="onViews"><text class="num">{{summary.views}}</text><text class="label">浏览</text></view>
+      <view class="metric"><text class="num">{{summary.visitors}}</text><text class="label">访客</text></view>
+    </view>
+  </view>
+</scroll-view>
+<view class="copy-mask" wx:if="{{copyLink}}" catchtouchmove="onCopyHold">
+  <view class="copy-panel">
+    <text class="copy-title">长按下方链接复制</text>
+    <text class="copy-desc">微信未允许这个小程序写入剪切板，长按链接即可复制。</text>
+    <text class="copy-url" user-select="{{true}}">{{copyLink}}</text>
+    <view class="copy-close" bindtap="onCloseCopy">关闭</view>
+  </view>
+</view>

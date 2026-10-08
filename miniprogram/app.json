@@ -1,0 +1,54 @@
+{
+  "pages": [
+    "pages/login/index",
+    "pages/home/index",
+    "pages/holder/index",
+    "pages/mine/index",
+    "pages/mine/bind",
+    "pages/mine/accounts",
+    "pages/home/edit",
+    "pages/holder/scan",
+    "pages/client/card",
+    "pages/employee/stats"
+  ],
+  "window": {
+    "navigationStyle": "custom",
+    "navigationBarBackgroundColor": "#182850",
+    "navigationBarTitleText": "创大产控",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#ffffff",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#8a9099",
+    "selectedColor": "#182850",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/home/index",
+        "text": "首页",
+        "iconPath": "assets/tab-home.png",
+        "selectedIconPath": "assets/tab-home-on.png"
+      },
+      {
+        "pagePath": "pages/holder/index",
+        "text": "名片夹",
+        "iconPath": "assets/tab-holder.png",
+        "selectedIconPath": "assets/tab-holder-on.png"
+      },
+      {
+        "pagePath": "pages/mine/index",
+        "text": "我的",
+        "iconPath": "assets/tab-mine.png",
+        "selectedIconPath": "assets/tab-mine-on.png"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "usingComponents": {
+    "nav-bar": "/components/nav-bar/index",
+    "app-tab": "/components/app-tab/index"
+  }
+}

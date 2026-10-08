@@ -1,0 +1,26 @@
+<nav-bar title="登录"></nav-bar>
+<scroll-view class="sub-scroll" scroll-y style="height: {{scrollHeight}}px">
+<view class="sub-body">
+  <image class="seal" src="/assets/brand-logo.png" mode="aspectFit"></image>
+  <text class="h1">创大产控 · 电子名片</text>
+  <text class="desc">高新技术集团统一名片。正式环境使用微信授权进入。</text>
+  <view class="panel">
+    <text class="section">进入工作台</text>
+    <text class="desc">微信授权会读取绑定手机号，用来领取管理员导入的名片。测试模式会直接进入，之后在「我的」里绑定手机号。</text>
+    <view class="error" wx:if="{{error}}">{{error}}</view>
+    <button class="primary" wx:if="{{!wechatSkip}}" open-type="getPhoneNumber" bindgetphonenumber="onWechatPhone" loading="{{loading}}">微信授权登录</button>
+    <button class="primary" wx:else loading="{{loading}}" bindtap="onWechat">微信授权登录</button>
+    <button class="ghost" wx:if="{{wechatSkip}}" loading="{{loading}}" bindtap="onSkip">使用测试身份进入</button>
+  </view>
+  <view class="band">
+    <view class="bars">
+      <view class="b b1"></view>
+      <view class="b b2"></view>
+      <view class="b b3"></view>
+      <view class="b b4"></view>
+      <view class="tip"></view>
+    </view>
+    <text class="slogan">创新创业 · 大国科技</text>
+  </view>
+</view>
+</scroll-view>

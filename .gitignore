@@ -1,0 +1,14 @@
+node_modules/
+.miniprogram/
+.tools/
+miniprogram/icon-build/
+backend/.env
+backend/.env.*
+!backend/.env.example
+backend/data.json
+backend/uploads/
+*.log
+.DS_Store
+miniprogram/project.private.config.json
+project.private.config.json
+.cursor/

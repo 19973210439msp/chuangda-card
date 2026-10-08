@@ -1,0 +1,7 @@
+<view class="nav" style="height: {{navHeight}}px; padding-top: {{statusBarHeight}}px;">
+  <view class="back" wx:if="{{showBack}}" bindtap="onBack">
+    <image class="chevron" src="/assets/icons/arrow-left.png" mode="aspectFit"></image>
+  </view>
+  <text class="title">{{title}}</text>
+</view>
+<view style="height: {{navHeight}}px;"></view>

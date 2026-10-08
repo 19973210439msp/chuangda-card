@@ -1,0 +1,53 @@
+<nav-bar title="名片"></nav-bar>
+<scroll-view class="sub-scroll" scroll-y style="height: {{scrollHeight}}px">
+<view class="sub-body">
+  <view class="error" wx:if="{{error}}">{{error}}</view>
+  <view class="shell" wx:if="{{card}}">
+    <view class="card-wrap">
+      <card-view card="{{card}}" company="{{company}}" flipped="{{flipped}}"></card-view>
+      <view class="flip" bindtap="onFlip">{{flipped ? '正面' : '翻面'}}</view>
+    </view>
+    <view class="saved" wx:if="{{favorited}}">已收入名片夹，可在「名片夹」里查看</view>
+    <view class="ops">
+      <view class="op" wx:if="{{card.phone}}" bindtap="onCall">
+        <image src="/assets/icons/phone-action.png" mode="aspectFit"></image>
+        <text>拨打电话</text>
+      </view>
+      <view class="op" bindtap="onSaveContact">
+        <image src="/assets/icons/save-contact.png" mode="aspectFit"></image>
+        <text>保存联系人</text>
+      </view>
+      <view class="op" wx:if="{{card.wechat}}" bindtap="onWechat">
+        <image src="/assets/icons/wechat-action.png" mode="aspectFit"></image>
+        <text>加微信</text>
+      </view>
+      <view class="op">
+        <button class="op-share" open-type="share">
+          <image src="/assets/icons/share-action.png" mode="aspectFit"></image>
+          <text>分享名片</text>
+        </button>
+      </view>
+      <view class="op" bindtap="onExchange">
+        <image src="/assets/icons/exchange-action.png" mode="aspectFit"></image>
+        <text>交换名片</text>
+      </view>
+      <view class="op" wx:if="{{canFavorite}}" bindtap="onFavorite">
+        <image src="/assets/icons/star-action.png" mode="aspectFit"></image>
+        <text>收藏名片</text>
+      </view>
+    </view>
+  </view>
+  <view class="exchange" wx:if="{{exchangeOpen}}">
+    <text class="contacts-title">留下你的联系方式</text>
+    <text class="label">姓名</text>
+    <input class="input" data-key="name" value="{{exchange.name}}" bindinput="onExchangeInput" />
+    <text class="label">电话</text>
+    <input class="input" data-key="phone" value="{{exchange.phone}}" bindinput="onExchangeInput" />
+    <text class="label">公司</text>
+    <input class="input" data-key="company" value="{{exchange.company}}" bindinput="onExchangeInput" />
+    <button class="primary" bindtap="onExchangeSubmit">提交</button>
+    <button class="ghost" bindtap="onExchangeCancel">取消</button>
+  </view>
+</view>
+</scroll-view>
+<app-tab></app-tab>

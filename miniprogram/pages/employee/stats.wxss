@@ -1,0 +1,58 @@
+.sub-scroll {
+  width: 100%;
+  background: #ffffff;
+}
+
+.body {
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 24rpx 32rpx 48rpx;
+}
+
+.count {
+  display: block;
+  margin-bottom: 16rpx;
+  color: #182850;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.empty {
+  color: #8a9099;
+  font-size: 26rpx;
+}
+
+.visit {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12rpx;
+  padding: 24rpx 28rpx;
+  border-radius: 16rpx;
+  background: #f4f6f9;
+}
+
+.visit-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.who {
+  display: block;
+  color: #182850;
+  font-weight: 700;
+}
+
+.sub {
+  display: block;
+  margin-top: 4rpx;
+  color: #5c6370;
+  font-size: 24rpx;
+}
+
+.exchanged {
+  margin-left: 16rpx;
+  color: #c82423;
+  font-size: 22rpx;
+  font-weight: 700;
+}

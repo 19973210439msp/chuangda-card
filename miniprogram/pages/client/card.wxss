@@ -1,0 +1,99 @@
+.card-wrap {
+  position: relative;
+}
+
+.flip {
+  position: absolute;
+  right: 16rpx;
+  top: 16rpx;
+  z-index: 4;
+  padding: 8rpx 18rpx;
+  border-radius: 24rpx;
+  background: rgba(24, 40, 80, 0.88);
+  color: #ffffff;
+  font-size: 22rpx;
+  font-weight: 700;
+}
+
+.ops {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 28rpx;
+  padding: 8rpx 0 12rpx;
+}
+
+.op {
+  width: 25%;
+  min-height: 140rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 12rpx 4rpx;
+}
+
+.op image {
+  width: 52rpx;
+  height: 52rpx;
+}
+
+.op text {
+  margin-top: 10rpx;
+  color: #182850;
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.op-share {
+  width: 100%;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  line-height: 1.3;
+  font-weight: 700;
+  color: #182850;
+}
+
+.op-share::after {
+  border: none;
+}
+
+.op-share image {
+  width: 52rpx;
+  height: 52rpx;
+}
+
+.op-share text {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+}
+
+.saved {
+  margin-top: 20rpx;
+  padding: 16rpx 20rpx;
+  border: 1rpx solid #e6e8ee;
+  color: #182850;
+  font-size: 26rpx;
+}
+.exchange {
+  margin-top: 20rpx;
+  padding: 28rpx;
+  border: 1rpx solid #e6e8ee;
+  border-radius: 12rpx;
+  background: #ffffff;
+}
+.contacts-title {
+  display: block;
+  color: #182850;
+  font-size: 30rpx;
+  font-weight: 700;
+}

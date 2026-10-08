@@ -1,0 +1,80 @@
+.file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 16rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #e6e8ee;
+}
+
+.file-row text {
+  flex: 1;
+  min-width: 0;
+  color: #3a3f4b;
+  font-size: 26rpx;
+}
+
+.file-row button {
+  width: auto;
+  height: 64rpx;
+  margin-top: 0;
+  padding: 0 20rpx;
+  line-height: 64rpx;
+}
+
+.lite {
+  display: flex;
+  align-items: center;
+  margin-top: 16rpx;
+}
+
+.lite-item {
+  flex: 1;
+  height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lite-item image {
+  width: 36rpx;
+  height: 36rpx;
+  margin-right: 8rpx;
+}
+
+.lite-item text {
+  color: #182850;
+  font-size: 26rpx;
+  font-weight: 700;
+  line-height: 36rpx;
+}
+
+.lite-bar {
+  color: #d0d4dc;
+  font-size: 28rpx;
+  line-height: 36rpx;
+}
+
+.qr-preview {
+  width: 160rpx;
+  height: 160rpx;
+  margin-top: 16rpx;
+  background: #ffffff;
+}
+
+.card-block .label {
+  margin: 28rpx 0 12rpx;
+  color: #182850;
+  font-size: 34rpx;
+  font-weight: 700;
+}
+
+.sub-body .input {
+  font-size: 36rpx;
+}
+
+.ph {
+  color: #b0b6c0;
+  font-size: 32rpx;
+}

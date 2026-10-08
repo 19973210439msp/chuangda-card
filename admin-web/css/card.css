@@ -1,0 +1,176 @@
+:root {
+  --ink: #10233f;
+  --paper: #efeae1;
+  --surface: #fffcf7;
+  --brass: #8c6a3d;
+  --text: #1c1915;
+  --muted: #4e493f;
+  --line: #ddd4c6;
+  --sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --serif: "Palatino Linotype", "Songti SC", "Noto Serif SC", serif;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #f4f5f7;
+  color: #182850;
+  font-family: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.front {
+  position: relative;
+  width: 100%;
+  max-width: 670px;
+  margin: 0 auto;
+  aspect-ratio: 670 / 430;
+  height: auto;
+  background: #fff;
+  color: #182850;
+  overflow: hidden;
+  container-type: inline-size;
+  font-family: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.front p { margin: 0; }
+.front .corp { position: absolute; left: 4.18%; top: 6.5%; right: 29.3%; }
+.front .corp-cn { display: inline-block; max-width: 100%; font-size: 3.6vw; font-size: 3.88cqw; font-weight: 700; line-height: 1.25; }
+.front .en-clip { margin-top: 0.4cqw; overflow: hidden; line-height: 1; }
+.front .corp-en,
+.front .brand-en {
+  display: inline-block;
+  font-weight: 700;
+  letter-spacing: -0.06em;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+.front .corp-en { font-size: 1.4vw; font-size: 1.49cqw; transform-origin: left center; }
+.front .brand { position: absolute; right: 3.6%; top: 5.1%; width: 25%; text-align: center; overflow: hidden; }
+.front .seal {
+  width: 64px; height: 64px; width: 14.3cqw; height: 14.3cqw; margin: 0 auto;
+  border-radius: 50%; overflow: hidden; background: #fff;
+}
+.front .seal-img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.front .brand-names { display: flex; flex-direction: column; align-items: center; }
+.front .brand-cn { display: inline-block; max-width: 100%; margin-top: 1cqw; font-size: 3.6vw; font-size: 3.88cqw; font-weight: 700; line-height: 1.1; }
+.front .brand-en { font-size: 1.4vw; font-size: 1.49cqw; transform-origin: center center; }
+.front .who { position: absolute; left: 4.18%; top: 39%; display: flex; align-items: baseline; }
+.front .who strong { font-size: 5vw; font-size: 5.37cqw; font-weight: 700; }
+.front .who span { margin-left: 2.4cqw; font-size: 3.6vw; font-size: 3.88cqw; font-weight: 500; }
+.front .mobile { position: absolute; left: 4.18%; top: 51%; font-size: 3.6vw; font-size: 3.88cqw; font-weight: 600; }
+.front .tick { position: absolute; left: 0; bottom: 6.5%; width: 2.1%; height: 25%; background: #182850; }
+.front .contact { position: absolute; left: 4.18%; bottom: 6%; width: 64%; }
+.front .contact p { font-size: 2.5vw; font-size: 2.69cqw; line-height: 1.55; font-weight: 500; }
+.front .qr { position: absolute; right: 3.3%; bottom: 4.2%; width: 72px; height: 72px; width: 19.7cqw; height: 19.7cqw; background: #fff; object-fit: contain; }
+main { min-height: 100vh; padding: 0 0 28px; background: #f4f5f7; }
+.icon-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 8px;
+  width: min(100%, 670px);
+  margin: 16px auto 0;
+  padding: 0 12px 24px;
+  box-sizing: border-box;
+}
+.icon-actions .op {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 84px;
+  margin: 0;
+  padding: 12px 4px;
+  border: none;
+  border-radius: 12px;
+  background: #fff;
+  color: #182850;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-decoration: none;
+  cursor: pointer;
+}
+.icon-actions .op svg { width: 28px; height: 28px; }
+.sheet {
+  width: min(420px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 28px 24px 20px;
+}
+.sheet.ink { background: var(--ink); color: #f6f1e7; }
+.sheet.ink .muted, .sheet.ink dt { color: #d9d0c3; }
+.sheet.light { background: white; }
+.rule { height: 1px; background: var(--brass); border: 0; margin: 0 0 18px; }
+.brand-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  color: var(--brass);
+  letter-spacing: 0.16em;
+  font-size: 12px;
+}
+.logo {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border: 1px solid var(--brass);
+}
+.portrait {
+  width: 96px;
+  height: 120px;
+  object-fit: cover;
+  margin-top: 18px;
+  background: #e7e1d6;
+}
+.initial {
+  width: 72px;
+  height: 72px;
+  margin-top: 18px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--brass);
+  font-family: var(--serif);
+  font-size: 32px;
+}
+h1 { font-family: var(--serif); font-size: 36px; line-height: 1.15; margin: 16px 0 4px; }
+.role { margin: 0; font-size: 15px; }
+.org { margin: 4px 0 0; color: var(--muted); }
+dl { margin: 18px 0 0; display: grid; gap: 10px; }
+.row { display: grid; grid-template-columns: 52px 1fr; gap: 8px; }
+dt { color: var(--muted); }
+dd { margin: 0; }
+.exchange-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.files { width: min(100%, 670px); margin: 12px auto 0; padding: 0 16px; box-sizing: border-box; list-style: none; }
+button, a.action {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  font: inherit;
+  cursor: pointer;
+}
+button.solid, a.action.solid { background: var(--ink); color: white; border-color: var(--ink); }
+.sheet.ink button.solid, .sheet.ink a.action.solid { background: #f6f1e7; color: var(--ink); border-color: #f6f1e7; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+.files a { color: inherit; }
+.note, .status {
+  width: min(420px, 100%);
+  text-align: center;
+}
+.status h1 { font-size: 28px; }
+dialog {
+  border: 1px solid var(--line);
+  width: min(420px, calc(100% - 24px));
+  padding: 20px;
+}
+dialog label { display: block; margin: 12px 0 6px; font-size: 13px; }
+dialog input { width: 100%; padding: 10px; border: 1px solid var(--line); font: inherit; }
+dialog menu { display: flex; justify-content: flex-end; gap: 8px; padding: 0; margin: 16px 0 0; }
+.form-error { color: #8c3a32; }

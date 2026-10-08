@@ -1,0 +1,179 @@
+.sheet {
+  position: relative;
+  width: 100%;
+  height: 430rpx;
+  margin-top: 0;
+  background: #ffffff;
+  color: #182850;
+  overflow: hidden;
+  font-family: "Source Han Sans SC", "Noto Sans SC", "Source Han Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.back-img {
+  width: 100%;
+  height: 100%;
+}
+
+.corp {
+  position: absolute;
+  left: 28rpx;
+  top: 28rpx;
+  right: 196rpx;
+}
+
+.corp-cn,
+.corp-en,
+.brand-cn,
+.brand-en,
+.name,
+.title,
+.mobile,
+.contact text {
+  display: block;
+}
+
+.corp-cn {
+  display: inline-block;
+  max-width: 100%;
+  font-size: 26rpx;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.en-clip {
+  width: 100%;
+  margin-top: 2rpx;
+  overflow: hidden;
+  line-height: 1;
+}
+
+.en-clip.center {
+  text-align: center;
+}
+
+.corp-en {
+  display: inline-block;
+  font-size: 10rpx;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.6rpx;
+  white-space: nowrap;
+  transform-origin: left center;
+}
+
+.brand {
+  position: absolute;
+  right: 24rpx;
+  top: 22rpx;
+  width: 168rpx;
+  text-align: center;
+}
+
+.seal {
+  width: 96rpx;
+  height: 96rpx;
+  margin: 0 auto;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.seal-img {
+  width: 96rpx;
+  height: 96rpx;
+}
+
+.brand-names {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.brand-cn {
+  display: inline-block;
+  max-width: 100%;
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.brand-en {
+  display: inline-block;
+  font-size: 10rpx;
+  font-weight: 700;
+  letter-spacing: -0.8rpx;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  transform-origin: center center;
+}
+
+.who {
+  position: absolute;
+  left: 28rpx;
+  top: 168rpx;
+  display: flex;
+  align-items: baseline;
+}
+
+.name {
+  font-size: 36rpx;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.title {
+  margin-left: 16rpx;
+  font-size: 26rpx;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.mobile {
+  position: absolute;
+  left: 28rpx;
+  top: 220rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.tick {
+  position: absolute;
+  left: 0;
+  bottom: 28rpx;
+  width: 14rpx;
+  height: 108rpx;
+  background: #182850;
+}
+
+.contact {
+  position: absolute;
+  left: 28rpx;
+  bottom: 26rpx;
+  width: 430rpx;
+}
+
+.contact text {
+  font-size: 18rpx;
+  line-height: 1.55;
+  font-weight: 500;
+}
+
+.qr {
+  position: absolute;
+  right: 22rpx;
+  bottom: 18rpx;
+  width: 132rpx;
+  height: 132rpx;
+  background: #fff;
+  z-index: 2;
+}
+
+.qr-img {
+  width: 132rpx;
+  height: 132rpx;
+}

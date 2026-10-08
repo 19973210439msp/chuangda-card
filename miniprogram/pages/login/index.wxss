@@ -1,0 +1,8 @@
+.seal {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  background: #ffffff;
+}
+.h1 { margin-top: 24rpx; }
+.primary::after { border: none; }
