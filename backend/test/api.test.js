@@ -344,3 +344,37 @@ test('binding the imported phone claims that card for the current wechat', async
   });
   assert.equal(stolen.status, 409);
 });
+
+test('deleting an employee also removes that card\'s view records', async () => {
+  const admin = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
+  const created = await api('/api/employees', {
+    method: 'POST',
+    token: admin.json.token,
+    body: { employeeNo: '3099', name: '待删员工', phone: '13800003099', title: '测试' },
+  });
+  assert.equal(created.status, 201);
+  const cardId = created.json.employee.id;
+
+  const viewed = await api('/api/analytics/view', {
+    method: 'POST',
+    body: { cardId, visitorId: 'visitor-orphan' },
+  });
+  assert.equal(viewed.status, 201);
+
+  const before = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
+  const otherViewCount = before.views.filter((view) => view.cardId !== cardId).length;
+  assert.equal(before.views.some((view) => view.id === viewed.json.viewId), true);
+
+  const removed = await api('/api/employees/' + cardId, { method: 'DELETE', token: admin.json.token });
+  assert.equal(removed.status, 200);
+
+  const after = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
+  assert.equal(after.people.some((person) => person.id === cardId), false);
+  assert.equal(after.views.some((view) => view.cardId === cardId), false);
+  assert.equal(after.views.some((view) => view.id === viewed.json.viewId), false);
+  assert.equal(after.views.filter((view) => view.cardId !== cardId).length, otherViewCount);
+
+  const listed = await api('/api/analytics/list?cardId=' + encodeURIComponent(cardId), { token: admin.json.token });
+  assert.equal(listed.status, 200);
+  assert.equal(listed.json.items.length, 0);
+});

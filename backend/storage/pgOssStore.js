@@ -190,6 +190,7 @@ const store = {
     return result.rowCount ? person : null;
   },
   async deletePerson(id) {
+    await query('DELETE FROM views WHERE card_id = $1', [id]);
     const result = await query('DELETE FROM people WHERE id = $1', [id]);
     return result.rowCount > 0;
   },

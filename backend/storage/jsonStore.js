@@ -109,6 +109,7 @@ const store = {
       const before = data.people.length;
       data.people = data.people.filter((person) => person.id !== id);
       data.holders = data.holders.filter((item) => item.cardId !== id && item.userId !== id);
+      data.views = data.views.filter((view) => view.cardId !== id);
       return data.people.length !== before;
     });
   },
