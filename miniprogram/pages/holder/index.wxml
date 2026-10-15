@@ -1,8 +1,20 @@
+<image class="bg-img" src="/assets/bg-plain.jpg" mode="aspectFill"></image>
 <nav-bar title="名片夹"></nav-bar>
 <scroll-view class="tab-scroll" scroll-y style="height: {{scrollHeight}}px">
   <view class="tab-body">
+    <view class="search">
+      <input
+        class="search-input"
+        value="{{keyword}}"
+        placeholder="搜索姓名、公司、手机号"
+        placeholder-class="search-ph"
+        confirm-type="search"
+        bindinput="onSearch"
+      />
+    </view>
     <view class="error" wx:if="{{error}}">{{error}}</view>
-    <view class="empty" wx:if="{{!items.length && !error}}">还没有名片</view>
+    <view class="empty" wx:if="{{!items.length && !error && !keyword}}">还没有名片</view>
+    <view class="empty" wx:if="{{!items.length && !error && keyword}}">没有找到名片</view>
     <view class="list" wx:if="{{items.length}}">
       <view class="swipe" wx:for="{{items}}" wx:key="cardId">
         <view class="actions">

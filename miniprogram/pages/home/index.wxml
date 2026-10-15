@@ -1,39 +1,78 @@
+<image class="bg-img" src="/assets/bg-plain.jpg" mode="aspectFill"></image>
 <nav-bar title="创大产控"></nav-bar>
 <scroll-view class="tab-scroll" scroll-y style="height: {{scrollHeight}}px">
   <view class="tab-body">
-    <view class="card-wrap">
-      <card-view card="{{card}}" company="{{company}}" flipped="{{flipped}}"></card-view>
-      <view class="flip" bindtap="onFlip">{{flipped ? '正面' : '翻面'}}</view>
-      <view class="lite">
-      <view class="lite-item" bindtap="onEdit">
-        <image src="/assets/icons/edit-card.png" mode="aspectFit"></image>
-        <text>编辑</text>
-      </view>
-      <view class="lite-item">
-        <button class="lite-share" open-type="share" hover-class="none">
-          <image src="/assets/icons/forward.png" mode="aspectFit"></image>
-          <text>转发</text>
-        </button>
-      </view>
-      <view class="lite-item" bindtap="onCopy">
-        <image src="/assets/icons/link.png" mode="aspectFit"></image>
-        <text>复制链接</text>
+    <view class="page-head">
+      <view class="page-mark"></view>
+      <view class="page-head-copy">
+        <text class="page-title">电子名片</text>
+        <text class="page-en">DIGITAL BUSINESS CARD</text>
       </view>
     </view>
+    <view class="card-wrap">
+      <card-view card="{{card}}" company="{{company}}" flipped="{{flipped}}"></card-view>
+      <text class="flip-hint" bindtap="onFlip">点击名片翻面 · TAP TO FLIP</text>
+      <view class="lite-wrap">
+        <view class="gold-dot"></view>
+        <view class="lite">
+        <view class="lite-item" hover-class="lite-on" bindtap="onEdit">
+          <image src="/assets/icons/edit-card.png" mode="aspectFit"></image>
+          <text>编辑</text>
+        </view>
+        <view class="lite-item" hover-class="lite-on">
+          <image src="/assets/icons/forward.png" mode="aspectFit"></image>
+          <text>转发</text>
+          <button class="lite-hit" open-type="share" hover-class="none"></button>
+        </view>
+        <view class="lite-item" hover-class="lite-on" bindtap="onSwitch">
+          <image src="/assets/icons/switch-card.png" mode="aspectFit"></image>
+          <text>切换</text>
+        </view>
+        <view class="lite-item" hover-class="lite-on" bindtap="onStyle">
+          <image src="/assets/icons/card-style.png" mode="aspectFit"></image>
+          <text>名片样式</text>
+        </view>
+        </view>
+      </view>
     </view>
     <view class="error" wx:if="{{error}}">{{error}}</view>
     <view class="guide" wx:if="{{needPhone}}" bindtap="onBindPhone">
-      <text class="guide-title">绑定手机号领取名片</text>
-      <text class="guide-desc">管理员导入资料后，绑定表格里的手机号即可同步到当前微信。</text>
+      <text class="guide-title">绑定手机号</text>
+      <text class="guide-desc">请退出后重新用「微信授权手机号登录」，以便匹配管理员导入的名片。</text>
     </view>
     <view class="guide" wx:if="{{needGuide}}" bindtap="onEdit">
-      <text class="guide-title">还未编辑名片</text>
+      <text class="guide-title">编辑名片</text>
       <text class="guide-desc">点击完善姓名和联系方式，完成后即可转发。</text>
     </view>
     <text class="section" wx:if="{{summary}}">我的数据</text>
     <view class="summary" wx:if="{{summary}}">
-      <view class="metric" bindtap="onViews"><text class="num">{{summary.views}}</text><text class="label">浏览</text></view>
-      <view class="metric"><text class="num">{{summary.visitors}}</text><text class="label">访客</text></view>
+      <view class="metric">
+        <image class="metric-ornament" src="/assets/icons/metric-views.png" mode="aspectFit"></image>
+        <text class="num">{{summary.views}}</text>
+        <text class="label">浏览</text>
+        <text class="metric-desc">名片被打开的次数</text>
+        <view class="metric-more" catchtap="onViews">
+          <text class="metric-more-text">点击查看</text>
+          <text class="metric-more-icon">></text>
+        </view>
+      </view>
+      <view class="metric">
+        <image class="metric-ornament" src="/assets/icons/metric-visitors.png" mode="aspectFit"></image>
+        <text class="num">{{summary.visitors}}</text>
+        <text class="label">访客</text>
+        <text class="metric-desc">打开过名片的人数</text>
+        <view class="metric-more" catchtap="onVisitors">
+          <text class="metric-more-text">点击查看</text>
+          <text class="metric-more-icon">></text>
+        </view>
+      </view>
+    </view>
+    <view class="corp-foot-wrap" wx:if="{{company.name}}">
+      <view class="corp-foot-block">
+        <view class="gold-bar"></view>
+        <text class="corp-foot">{{company.name}}</text>
+        <view class="foot-red"></view>
+      </view>
     </view>
   </view>
 </scroll-view>

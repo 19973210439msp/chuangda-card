@@ -1,17 +1,33 @@
-<nav-bar title="浏览详情"></nav-bar>
+<nav-bar title="{{title}}"></nav-bar>
 <scroll-view class="sub-scroll" scroll-y style="height: {{scrollHeight}}px">
   <view class="body">
     <view class="error" wx:if="{{error}}">{{error}}</view>
-    <text class="count">共 {{items.length}} 次浏览</text>
-    <view class="empty" wx:if="{{!items.length && !error}}">还没有人打开你的名片。</view>
-    <view class="visit" wx:for="{{items}}" wx:key="id">
-      <view class="visit-main">
-        <text class="who">{{item.visitorId || '匿名访客'}}</text>
-        <text class="sub">{{item.when}} · 停留 {{item.durationSec}} 秒</text>
-        <text class="sub" wx:if="{{item.exchangeText}}">交换 {{item.exchangeText}}</text>
+    <block wx:if="{{mode === 'visitors'}}">
+      <text class="count">共 {{total}} 位访客</text>
+      <view class="empty" wx:if="{{!visitors.length && !error}}">还没有访客。</view>
+      <view class="visit" wx:for="{{visitors}}" wx:key="key">
+        <view class="visit-main">
+          <text class="who">{{item.label}}</text>
+          <text class="sub" wx:if="{{item.detail}}">{{item.detail}}</text>
+          <text class="sub">最近 {{item.when}} · 来访 {{item.visits}} 次 · 停留 {{item.durationSec}} 秒</text>
+        </view>
+        <text class="exchanged" wx:if="{{item.phone}}" data-phone="{{item.phone}}" bindtap="onCall">拨打</text>
       </view>
-      <text class="exchanged" wx:if="{{item.exchange}}">已交换</text>
-    </view>
+    </block>
+    <block wx:else>
+      <text class="count">共 {{total}} 次浏览</text>
+      <view class="empty" wx:if="{{!items.length && !error}}">还没有人打开你的名片。</view>
+      <view class="visit" wx:for="{{items}}" wx:key="id">
+        <view class="visit-main">
+          <text class="who">{{item.label}}</text>
+          <text class="sub" wx:if="{{item.detail}}">{{item.detail}}</text>
+          <text class="sub">{{item.when}} · 停留 {{item.durationSec}} 秒</text>
+          <text class="sub" wx:if="{{item.exchangeText}}">交换 {{item.exchangeText}}</text>
+        </view>
+        <text class="exchanged" wx:if="{{item.phone}}" data-phone="{{item.phone}}" bindtap="onCall">拨打</text>
+      </view>
+      <button class="more" wx:if="{{hasMore}}" bindtap="onLoadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">加载更多</button>
+    </block>
   </view>
 </scroll-view>
 <app-tab></app-tab>

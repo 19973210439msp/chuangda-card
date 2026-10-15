@@ -1,0 +1,79 @@
+page {
+  background: #ffffff;
+}
+
+.current {
+  display: block;
+  margin-bottom: 8rpx;
+  color: #8a93a3;
+  font-size: 26rpx;
+  line-height: 1.5;
+}
+
+.code-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.code-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sub-body .code-btn {
+  flex: none;
+  width: 220rpx;
+  height: 88rpx;
+  margin-top: 0;
+  padding: 0 12rpx;
+  font-size: 26rpx;
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  margin-top: 20rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid #e6e8ee;
+}
+
+.account-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.account-phone {
+  display: block;
+  color: #182850;
+  font-size: 30rpx;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.account-name {
+  display: block;
+  margin-top: 4rpx;
+  color: #8a93a3;
+  font-size: 24rpx;
+  line-height: 1.4;
+}
+
+.account-switch {
+  flex: none;
+  margin-left: 16rpx;
+  padding: 8rpx 22rpx;
+  border: 1rpx solid #182850;
+  border-radius: 28rpx;
+  color: #182850;
+  font-size: 24rpx;
+  line-height: 1.4;
+}
+
+.hint {
+  display: block;
+  margin-top: 16rpx;
+  color: #8a93a3;
+  font-size: 24rpx;
+  line-height: 1.5;
+}

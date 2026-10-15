@@ -1,4 +1,5 @@
 <view class="nav" style="height: {{navHeight}}px; padding-top: {{statusBarHeight}}px;">
+  <image class="nav-bg" src="/assets/bg-card.jpg" mode="aspectFill"></image>
   <view class="back" wx:if="{{showBack}}" bindtap="onBack">
     <image class="chevron" src="/assets/icons/arrow-left.png" mode="aspectFit"></image>
   </view>

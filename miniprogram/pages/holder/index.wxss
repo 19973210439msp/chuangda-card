@@ -1,19 +1,51 @@
+.bg-img {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+}
+
 .tab-scroll {
+  position: relative;
+  z-index: 1;
   width: 100%;
-  background: #ffffff;
+  background-color: transparent;
+  background-image: none;
 }
 
 .tab-body {
+  position: relative;
   box-sizing: border-box;
   padding: 24rpx 32rpx 48rpx;
   padding-bottom: calc(300rpx + constant(safe-area-inset-bottom));
   padding-bottom: calc(300rpx + env(safe-area-inset-bottom));
 }
 
-.list {
-  border: 1rpx solid #e6e8ee;
-  border-radius: 12rpx;
+.search {
+  margin-bottom: 20rpx;
+}
+
+.search-input {
+  height: 76rpx;
+  padding: 0 28rpx;
+  border-radius: 38rpx;
   background: #ffffff;
+  box-shadow: 0 8rpx 24rpx rgba(15, 40, 89, 0.06);
+  color: #182850;
+  font-size: 28rpx;
+}
+
+.search-ph {
+  color: #b0b4bb;
+}
+
+.list {
+  border-radius: 40rpx;
+  background: #ffffff;
+  box-shadow: 0 8rpx 32rpx rgba(15, 40, 89, 0.08);
+  overflow: hidden;
 }
 
 .swipe {
@@ -42,7 +74,7 @@
   justify-content: center;
   color: #ffffff;
   font-size: 26rpx;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .act.pin {
@@ -78,16 +110,16 @@
 
 .who {
   display: block;
-  color: #182850;
+  color: #333333;
   font-size: 32rpx;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .sub {
   display: block;
-  margin-top: 6rpx;
-  color: #5c6370;
-  font-size: 24rpx;
+  margin-top: 8rpx;
+  color: #666666;
+  font-size: 28rpx;
 }
 
 .scan-dock {
@@ -109,12 +141,12 @@
   height: 88rpx;
   margin: 0;
   padding: 0 28rpx;
-  border-radius: 44rpx;
+  border-radius: 999px;
   color: #ffffff;
-  background: #182850;
+  background: #0F2859;
   border: none;
   font-size: 28rpx;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 88rpx;
 }
 

@@ -42,6 +42,8 @@ Page({
         url: base + '/api/holder/recognize',
         filePath: this.data.photo,
         name: 'photo',
+        enableHttp2: false,
+        enableQuic: false,
         header: { Authorization: 'Bearer ' + wx.getStorageSync('token') },
         success: (res) => {
           let data = {};
@@ -52,9 +54,10 @@ Page({
           }
           this.setData({ draft: data.draft, recognizing: false });
         },
-        fail: () => {
+        fail: (err) => {
+          console.error('fail:', JSON.stringify(err));
           apiBaseUtil.markBroken();
-          this.setData({ error: '上传失败', recognizing: false });
+          this.setData({ error: (err && err.errMsg) || '上传失败', recognizing: false });
         },
       });
     }).catch(() => {

@@ -35,6 +35,20 @@ test('storage defaults to json and pg-oss refuses a partial setup', () => {
   }
 });
 
+test('production initial data keeps company branding but no demo people', () => {
+  const previousNode = process.env.NODE_ENV;
+  const { initialStoreData, seedData } = require('../lib/person');
+  process.env.NODE_ENV = 'production';
+  const production = initialStoreData();
+  process.env.NODE_ENV = 'test';
+  const development = initialStoreData();
+  process.env.NODE_ENV = previousNode;
+  assert.equal(production.company.name, seedData().company.name);
+  assert.equal(production.people.length, 0);
+  assert.equal(production.views.length, 0);
+  assert.ok(development.people.length > 0);
+});
+
 test('production cannot skip WeChat auth', () => {
   const config = require('../config');
   const previousNode = process.env.NODE_ENV;
@@ -91,6 +105,80 @@ test('ocr stays on Tencent and reports missing keys', () => {
   else process.env.TENCENT_SECRET_ID = previousId;
   if (previousKey === undefined) delete process.env.TENCENT_SECRET_KEY;
   else process.env.TENCENT_SECRET_KEY = previousKey;
+});
+
+test('purgeExpiredCodes removes used and long-expired rows', async () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const previousFile = process.env.DATA_FILE;
+  const previousDriver = process.env.STORAGE_DRIVER;
+  const dataFile = path.join(os.tmpdir(), `chuangda-purge-${process.pid}.json`);
+  process.env.DATA_FILE = dataFile;
+  process.env.STORAGE_DRIVER = 'json';
+  fs.rmSync(dataFile, { force: true });
+  const { resetStoreForTests, getStore } = require('../storage');
+  resetStoreForTests();
+  const store = getStore();
+  await store.ready();
+  await store.insertCode({
+    id: 'code-used',
+    userId: 'emp-1',
+    channel: 'sms',
+    target: '13800000001',
+    codeHash: 'a',
+    expiresAt: new Date(Date.now() + 600000).toISOString(),
+    used: true,
+    createdAt: new Date().toISOString(),
+  });
+  await store.insertCode({
+    id: 'code-old',
+    userId: 'emp-1',
+    channel: 'sms',
+    target: '13800000001',
+    codeHash: 'b',
+    expiresAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    used: false,
+    createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+  });
+  await store.insertCode({
+    id: 'code-fresh',
+    userId: 'emp-1',
+    channel: 'sms',
+    target: '13800000001',
+    codeHash: 'c',
+    expiresAt: new Date(Date.now() + 600000).toISOString(),
+    used: false,
+    createdAt: new Date().toISOString(),
+  });
+  const removed = await store.purgeExpiredCodes({ olderThan: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() });
+  assert.equal(removed, 2);
+  const data = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
+  assert.equal(data.codes.length, 1);
+  assert.equal(data.codes[0].id, 'code-fresh');
+  resetStoreForTests();
+  fs.rmSync(dataFile, { force: true });
+  if (previousFile === undefined) delete process.env.DATA_FILE;
+  else process.env.DATA_FILE = previousFile;
+  if (previousDriver === undefined) delete process.env.STORAGE_DRIVER;
+  else process.env.STORAGE_DRIVER = previousDriver;
+});
+
+test('interest index from stats matches interest index from view rows', () => {
+  const { interestIndex, interestIndexFromStats, averageDuration } = require('../lib/interest');
+  const views = [
+    { durationSec: 60, visitorId: 'a', exchange: null },
+    { durationSec: 120, visitorId: 'b', exchange: { name: '客', phone: '13900000000' } },
+    { durationSec: 30, visitorId: 'a', exchange: null },
+  ];
+  const fromRows = interestIndex(views);
+  const fromStats = interestIndexFromStats({
+    views: views.length,
+    avgDurationSec: averageDuration(views),
+    visitors: 2,
+    exchanges: 1,
+  });
+  assert.equal(fromStats, fromRows);
 });
 
 test('interest index uses views, duration, visitors and exchanges', () => {

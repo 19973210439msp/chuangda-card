@@ -1,6 +1,18 @@
 const { request } = require('../../utils/request');
 const { decorateCard, decorateCompany, visitorId, pageScrollHeight } = require('../../utils/util');
 
+function contactClient() {
+  let info = {};
+  let sys = {};
+  try { info = wx.getDeviceInfo ? wx.getDeviceInfo() : {}; } catch (err) { info = {}; }
+  try { sys = wx.getSystemInfoSync(); } catch (err) { sys = {}; }
+  const platform = String(info.platform || sys.platform || '').toLowerCase();
+  const blob = [platform, info.system, info.brand, sys.system, sys.brand].join(' ');
+  if (platform === 'windows' || platform === 'mac' || platform === 'devtools') return 'desktop';
+  if (/ohos|harmony|openharmony/i.test(blob)) return 'harmony';
+  return 'phone';
+}
+
 Page({
   data: {
     card: null,
@@ -16,60 +28,71 @@ Page({
   onLoad(options) {
     this.setData({ scrollHeight: pageScrollHeight() });
     this.cardId = options.cardId || '';
+    this.shareCard = options.shareCard || '';
     this.from = options.from || '';
     this.viewId = '';
     this.started = Date.now();
+    if (options.collected === '1') {
+      this.kept = true;
+      this.setData({ favorited: true, canFavorite: false });
+    }
   },
   onShow() {
     if (!this.cardId) {
       this.setData({ error: '缺少名片编号' });
       return;
     }
-    request({ url: '/api/cards/' + this.cardId, redirectOnAuth: false }).then((data) => {
+    const query = this.shareCard ? '?shareCard=' + encodeURIComponent(this.shareCard) : '';
+    Promise.all([
+      request({ url: '/api/cards/' + this.cardId + query, redirectOnAuth: false, auth: false }),
+      request({ url: '/api/company', redirectOnAuth: false, auth: false }),
+    ]).then(([data, company]) => {
       this.setData({
         card: decorateCard(data.card),
-        company: decorateCompany(data.company),
+        company: decorateCompany(data.company || company.company),
         error: '',
       });
-      if (data.company && this.from !== 'holder') this.startView();
-      this.keepCard();
+      if (data.card && this.from !== 'holder') this.startView();
+      this.showFavorite();
     }).catch((err) => this.setData({ error: err.message, card: null }));
   },
   onFlip() {
     this.setData({ flipped: !this.data.flipped });
   },
-  keepCard() {
-    if (this.from === 'holder') {
+  showFavorite() {
+    if (this.from === 'holder' || this.kept) {
       this.setData({ favorited: true, canFavorite: false });
       return;
     }
-    if (!wx.getStorageSync('token')) {
-      this.setData({ favorited: false, canFavorite: true });
-      return;
-    }
-    if (this.kept) return;
-    this.kept = true;
+    this.setData({ favorited: false, canFavorite: true });
+  },
+  saveFavorite() {
     request({
       url: '/api/holder',
       method: 'POST',
       data: { cardId: this.cardId },
       redirectOnAuth: false,
     }).then((data) => {
+      this.kept = true;
       this.setData({ favorited: true, canFavorite: false });
       if (!data.already) wx.showToast({ title: '已收入名片夹', icon: 'success' });
     }).catch((err) => {
-      this.kept = false;
       const message = err.message || '';
       if (message.indexOf('自己') >= 0) {
-        this.setData({ canFavorite: false, favorited: false });
+        this.setData({ canFavorite: false, favorited: false, error: message });
         return;
       }
-      this.setData({ canFavorite: true, favorited: false });
+      this.setData({ error: message, canFavorite: true, favorited: false });
     });
   },
   onFavorite() {
-    wx.setStorageSync('pendingCardId', this.cardId);
-    wx.navigateTo({ url: '/pages/login/index' });
+    if (!wx.getStorageSync('token')) {
+      wx.setStorageSync('pendingCardId', this.cardId);
+      if (this.shareCard) wx.setStorageSync('pendingShareCard', this.shareCard);
+      wx.navigateTo({ url: '/pages/login/index' });
+      return;
+    }
+    this.saveFavorite();
   },
   onHide() { this.report(); },
   onUnload() { this.report(); },
@@ -81,10 +104,13 @@ Page({
       method: 'POST',
       data: { cardId: this.cardId, visitorId: visitorId() },
       redirectOnAuth: false,
+      auth: !!wx.getStorageSync('token'),
     }).then((data) => {
       this.viewId = data.viewId;
       this.started = Date.now();
-    }).catch(() => {});
+    }).catch(() => {
+      this.starting = false;
+    });
   },
   report() {
     if (!this.viewId || this.reported) return;
@@ -95,6 +121,7 @@ Page({
       method: 'PUT',
       data: { durationSec },
       redirectOnAuth: false,
+      auth: false,
     }).catch(() => {});
   },
   onCall() {
@@ -104,20 +131,61 @@ Page({
   onSaveContact() {
     const card = this.data.card;
     if (!card) return;
-    wx.addPhoneContact({
-      firstName: card.name || '名片',
-      mobilePhoneNumber: card.phone || '',
-      organization: card.company || '',
-      title: card.title || '',
-      email: card.email || '',
-      weChatNumber: card.wechat || '',
-      workAddressStreet: card.address || '',
-    });
-  },
-  onWechat() {
-    const card = this.data.card;
-    if (!card || !card.wechat) return;
-    wx.setClipboardData({ data: card.wechat });
+    const phone = String(card.phone || '').trim();
+    const showFail = (reason) => {
+      wx.showModal({
+        title: '保存失败',
+        content: reason + (phone ? '\n电话：' + phone + '\n点「复制号码」，再到手机通讯录里手动添加。' : '\n这张名片没有电话号码。'),
+        confirmText: phone ? '复制号码' : '知道了',
+        cancelText: '关闭',
+        showCancel: !!phone,
+        success: (res) => {
+          if (!res.confirm || !phone) return;
+          wx.setClipboardData({
+            data: phone,
+            success: () => wx.showToast({ title: '号码已复制', icon: 'none' }),
+            fail: () => wx.showToast({ title: '请手动记下 ' + phone, icon: 'none' }),
+          });
+        },
+      });
+    };
+    const client = contactClient();
+    if (client === 'desktop') {
+      showFail('电脑版微信不能把联系人写入手机通讯录。请用手机微信打开这张名片后再保存。');
+      return;
+    }
+    if (client === 'harmony') {
+      showFail('鸿蒙版微信目前不能把联系人写入通讯录。');
+      return;
+    }
+    if (!wx.canIUse('addPhoneContact')) {
+      showFail('当前手机微信不能把联系人写入通讯录。');
+      return;
+    }
+    let settled = false;
+    try {
+      wx.addPhoneContact({
+        firstName: card.name || '名片',
+        mobilePhoneNumber: phone,
+        organization: card.company || '',
+        title: card.title || '',
+        email: card.email || '',
+        weChatNumber: card.wechat || '',
+        workAddressStreet: card.address || '',
+        success: () => { settled = true; },
+        fail: () => {
+          settled = true;
+          showFail('微信没有完成保存。');
+        },
+        complete: () => {
+          if (settled) return;
+          settled = true;
+          showFail('微信没有完成保存。');
+        },
+      });
+    } catch (err) {
+      showFail('微信没有完成保存。');
+    }
   },
   onExchange() { this.setData({ exchangeOpen: true }); },
   onExchangeInput(event) {
@@ -135,6 +203,7 @@ Page({
       method: 'PUT',
       data: { exchange },
       redirectOnAuth: false,
+      auth: false,
     }).then(() => {
       this.setData({ exchangeOpen: false, error: '' });
       wx.showToast({ title: '已提交', icon: 'success' });
@@ -143,8 +212,8 @@ Page({
   onShareAppMessage() {
     const card = this.data.card || {};
     return {
-      title: (card.name || '创大产控') + '的电子名片',
-      path: '/pages/client/card?cardId=' + this.cardId,
+      title: '这是我的数字名片，望惠存',
+      path: '/pages/client/card?cardId=' + this.cardId + (this.shareCard ? '&shareCard=' + this.shareCard : ''),
     };
   },
 });

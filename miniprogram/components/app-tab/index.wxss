@@ -35,6 +35,6 @@
 }
 
 .tab.on text {
-  color: #182850;
-  font-weight: 700;
+  color: #0F2859;
+  font-weight: 600;
 }

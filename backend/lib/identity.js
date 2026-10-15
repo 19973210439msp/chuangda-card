@@ -1,11 +1,12 @@
 const { httpError } = require('./errors');
 const { normalizePhone } = require('./validate');
+const { identityPhone } = require('./cards');
 
 async function findOccupyingPhone(store, phone) {
   const target = normalizePhone(phone);
   if (!target) return null;
   const people = await store.listPeople({ kind: 'employee' });
-  return people.find((person) => person.status !== 'closed' && normalizePhone(person.phone) === target) || null;
+  return people.find((person) => person.status !== 'closed' && normalizePhone(identityPhone(person)) === target) || null;
 }
 
 async function assertPhoneAvailable(store, phone, exceptId) {

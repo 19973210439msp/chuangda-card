@@ -1,17 +1,20 @@
 const { request, uploadFile } = require('../../utils/request');
 const { ensureLogin } = require('../../utils/guard');
-const { pageScrollHeight, mediaUrl } = require('../../utils/util');
+const { pageScrollHeight } = require('../../utils/util');
 
 Page({
   data: {
     form: {},
     origin: {},
-    phoneCode: '',
-    emailCode: '',
     devHint: '',
     error: '',
     scrollHeight: 600,
-    wechatQr: '',
+    companies: [],
+    companyNames: [],
+    companyIndex: 0,
+    certCode: '',
+    cert: {},
+    companyOpen: false,
   },
   onLoad() {
     this.setData({ scrollHeight: pageScrollHeight() });
@@ -24,7 +27,31 @@ Page({
     }
     request({ url: '/api/employee/me' }).then((data) => {
       const form = Object.assign({ attachments: [] }, data.employee);
-      this.setData({ form, origin: Object.assign({}, form), wechatQr: this.qrUrl(form) });
+      const cardId = form.activeCardId || '';
+      return Promise.all([
+        Promise.resolve(form),
+        request({ url: '/api/company' }),
+        cardId ? request({ url: '/api/employee/certification?cardId=' + encodeURIComponent(cardId) }) : Promise.resolve({}),
+      ]);
+    }).then(([form, company, cert]) => {
+      const hqName = (company.company && company.company.name) || '总公司';
+      const choices = [{ id: '', name: hqName }];
+      ((cert && cert.certified) || []).forEach((item) => {
+        if (item && item.companyId) choices.push({ id: item.companyId, name: item.companyName || '已认证子公司' });
+      });
+      if (form.companyId && !choices.some((item) => item.id === form.companyId)) {
+        choices.push({ id: form.companyId, name: form.company || '当前公司' });
+      }
+      let companyIndex = choices.findIndex((item) => item.id === (form.companyId || ''));
+      if (companyIndex < 0) companyIndex = 0;
+      this.setData({
+        form,
+        origin: Object.assign({}, form),
+        companies: choices,
+        companyNames: choices.map((item) => item.name),
+        companyIndex,
+        error: '',
+      });
     }).catch((err) => this.setData({ error: err.message }));
   },
   holdDraft() {
@@ -33,52 +60,6 @@ Page({
   onInput(event) {
     const key = event.currentTarget.dataset.key;
     this.setData({ ['form.' + key]: event.detail.value });
-  },
-  onCode(event) {
-    this.setData({ [event.currentTarget.dataset.key]: event.detail.value });
-  },
-  chooseImage(kind) {
-    this.holdDraft();
-    wx.chooseMedia({
-      count: 1,
-      mediaType: ['image'],
-      sourceType: ['album', 'camera'],
-      success: (res) => {
-        const file = res.tempFiles && res.tempFiles[0];
-        if (!file) return;
-        uploadFile(file.tempFilePath).then((data) => {
-          this.setData({ ['form.' + kind]: data.url });
-        }).catch((err) => this.setData({ error: err.message }));
-      },
-    });
-  },
-  onAvatar() { this.chooseImage('avatar'); },
-  onPortrait() { this.chooseImage('portrait'); },
-  qrUrl(form) {
-    const list = (form && form.attachments) || [];
-    const found = list.filter((item) => item && item.name === '微信二维码').pop();
-    return found && found.url ? mediaUrl(found.url) : '';
-  },
-  onWechatQr() {
-    this.holdDraft();
-    wx.chooseMedia({
-      count: 1,
-      mediaType: ['image'],
-      sourceType: ['album', 'camera'],
-      success: (res) => {
-        const file = res.tempFiles && res.tempFiles[0];
-        if (!file) return;
-        this.setData({ wechatQr: file.tempFilePath });
-        uploadFile(file.tempFilePath).then((data) => {
-          const attachments = (this.data.form.attachments || []).filter((item) => !item || item.name !== '微信二维码');
-          attachments.push({ name: '微信二维码', url: data.url });
-          this.setData({
-            'form.attachments': attachments,
-            wechatQr: file.tempFilePath,
-          });
-        }).catch((err) => this.setData({ error: err.message }));
-      },
-    });
   },
   onAddFile() {
     this.holdDraft();
@@ -100,41 +81,41 @@ Page({
     const attachments = (this.data.form.attachments || []).slice();
     const removed = attachments.splice(index, 1)[0];
     const patch = { 'form.attachments': attachments };
-    if (removed && removed.name === '微信二维码') patch.wechatQr = '';
     this.setData(patch);
   },
-  sendCode(channel) {
-    const form = this.data.form;
-    const isPhone = channel === 'phone';
-    const url = isPhone ? '/api/account/phone/code' : '/api/account/email/code';
-    const body = isPhone ? { phone: form.phone } : { email: form.email };
-    request({ url, method: 'POST', data: body }).then((data) => {
-      this.setData({ devHint: data.devCode ? '测试验证码 ' + data.devCode : '验证码已发送' });
-    }).catch((err) => this.setData({ error: err.message }));
+  onOpenCompanies() {
+    if (!(this.data.companies || []).length) return;
+    this.setData({ companyOpen: true });
   },
-  onPhoneCode() { this.sendCode('phone'); },
-  onEmailCode() { this.sendCode('email'); },
+  onCloseCompanies() {
+    this.setData({ companyOpen: false });
+  },
+  onHoldCompanies() {},
+  onChooseCompany(event) {
+    const index = Number(event.currentTarget.dataset.index);
+    const companyIndex = Number.isFinite(index) ? index : 0;
+    const picked = (this.data.companies || [])[companyIndex] || { id: '', name: '' };
+    this.setData({
+      companyIndex,
+      companyOpen: false,
+      'form.company': picked.name,
+      'form.companyId': picked.id,
+    });
+  },
   onSave() {
     const form = this.data.form;
-    const origin = this.data.origin;
     const body = {
-      avatar: form.avatar || '',
-      portrait: form.portrait || '',
+      name: form.name || '',
+      company: form.company || '',
+      companyId: form.companyId || '',
       name: form.name || '',
       company: form.company || '',
       title: form.title || '',
-      wechat: form.wechat || '',
+      phone: form.phone || '',
+      email: form.email || '',
       address: form.address || '',
       attachments: form.attachments || [],
     };
-    if ((form.phone || '') !== (origin.phone || '')) {
-      body.phone = form.phone;
-      body.phoneCode = this.data.phoneCode;
-    }
-    if ((form.email || '') !== (origin.email || '')) {
-      body.email = form.email;
-      body.emailCode = this.data.emailCode;
-    }
     request({ url: '/api/employee/me', method: 'PUT', data: body }).then(() => {
       wx.showToast({ title: '已保存', icon: 'success' });
       wx.navigateBack();

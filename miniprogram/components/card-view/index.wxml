@@ -1,9 +1,35 @@
-<view class="sheet back" wx:if="{{card && flipped}}">
-  <image class="back-img" src="/assets/card-back.png" mode="aspectFill"></image>
+<view class="sheet sheet-wave" wx:if="{{card && flipped && card.cardTemplate === 'wave'}}">
+  <image class="back-img" src="/assets/wave-back.jpg" mode="scaleToFill"></image>
+</view>
+<view class="sheet back" wx:elif="{{card && flipped}}">
+  <image class="back-img" src="/assets/card-back.png" mode="scaleToFill"></image>
+</view>
+<view class="sheet sheet-horizon" wx:elif="{{card && card.cardTemplate === 'horizon'}}">
+  <view class="hz-side">
+    <text class="hz-brand">{{company.shortName || '创大产控'}}</text>
+    <text class="hz-name">{{card.name || '未填写姓名'}}</text>
+    <text class="hz-title">{{card.title}}</text>
+  </view>
+  <view class="hz-main">
+    <text class="hz-company">{{card.company || company.name}}</text>
+    <text class="hz-line">手机 {{card.phone}}</text>
+    <text class="hz-line">邮箱 {{card.email}}</text>
+    <text class="hz-line">地址 {{card.address || company.address}}</text>
+    <image class="hz-qr" src="{{company.qrSrc || '/assets/official-qr.jpg'}}" mode="aspectFit" show-menu-by-longpress="{{true}}" bindtap="onScanOfficial"></image>
+  </view>
+</view>
+<view class="sheet sheet-wave" wx:elif="{{card && card.cardTemplate === 'wave'}}">
+  <image class="wave-bg" src="/assets/wave-front.jpg" mode="scaleToFill"></image>
+  <text class="wv-name">{{card.name || '未填写姓名'}}</text>
+  <text class="wv-title">{{card.title}}</text>
+  <view class="wv-row wv-phone"><text>{{card.phone}}</text></view>
+  <view class="wv-row wv-email"><text>{{card.email}}</text></view>
+  <view class="wv-row wv-address"><text>{{card.address || company.address}}</text></view>
+  <image class="wv-qr" src="{{company.qrSrc || '/assets/official-qr.jpg'}}" mode="aspectFit" show-menu-by-longpress="{{true}}" bindtap="onScanOfficial"></image>
 </view>
 <view class="sheet" wx:elif="{{card}}">
   <view class="corp">
-    <text class="corp-cn">{{company.name || card.company}}</text>
+    <text class="corp-cn" style="transform: scaleX({{corpCnScale}});">{{company.name}}</text>
     <view class="en-clip">
       <text class="corp-en" style="transform: scaleX({{corpScale}});">{{company.nameEn}}</text>
     </view>
@@ -28,9 +54,9 @@
   <view class="contact">
     <text>电话/Tel:{{company.phone}}</text>
     <text>邮箱/E-mail:{{card.email}}</text>
-    <text>地址/Add:{{company.address || card.address}}</text>
+    <text>地址/Add:{{card.address || company.address}}</text>
   </view>
-  <view wx:if="{{qrSrc}}" class="qr">
-    <image class="qr-img" src="{{qrSrc}}" mode="aspectFit"></image>
+  <view class="qr">
+    <image class="qr-img" src="{{company.qrSrc || '/assets/official-qr.jpg'}}" mode="aspectFit" show-menu-by-longpress="{{true}}" bindtap="onScanOfficial"></image>
   </view>
 </view>

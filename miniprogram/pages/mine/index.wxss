@@ -1,18 +1,34 @@
+.bg-img {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+}
+
 .mine-scroll {
+  position: relative;
+  z-index: 1;
   width: 100%;
-  background: #f5f6f8;
+  background-color: transparent;
+  background-image: none;
 }
 
 .mine-body {
+  position: relative;
   box-sizing: border-box;
   min-height: 100%;
-  padding: 24rpx 0 48rpx;
+  padding: 32rpx 28rpx 48rpx;
   padding-bottom: calc(180rpx + constant(safe-area-inset-bottom));
   padding-bottom: calc(180rpx + env(safe-area-inset-bottom));
 }
 
 .group {
   background: #ffffff;
+  border-radius: 40rpx;
+  box-shadow: 0 8rpx 32rpx rgba(15, 40, 89, 0.08);
+  overflow: hidden;
 }
 
 .row {
@@ -28,6 +44,10 @@
   border-bottom: none;
 }
 
+.row-static {
+  border-bottom: none;
+}
+
 .ico {
   width: 40rpx;
   height: 40rpx;
@@ -37,14 +57,14 @@
 
 .name {
   flex: 1;
-  color: #1a1a1a;
+  color: #333333;
   font-size: 30rpx;
 }
 
 .value {
   max-width: 280rpx;
   margin-right: 8rpx;
-  color: #8a9099;
+  color: #666666;
   font-size: 26rpx;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -65,24 +85,4 @@
   color: #182850;
   font-size: 24rpx;
   line-height: 1.4;
-}
-
-.net-box {
-  margin-top: 80rpx;
-  padding: 20rpx 32rpx 40rpx;
-  text-align: center;
-}
-
-.net-line {
-  display: block;
-  font-size: 22rpx;
-  color: #9aa5b8;
-  word-break: break-all;
-}
-
-.net-tip {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 20rpx;
-  color: #c0c7d2;
 }

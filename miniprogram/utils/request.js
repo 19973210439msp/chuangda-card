@@ -8,14 +8,16 @@ function getBase() {
   return apiBaseUtil.resolve();
 }
 
-function requestOnce(base, { url, method = 'GET', data, redirectOnAuth = true, timeout = 15000 }) {
-  const token = wx.getStorageSync('token');
+function requestOnce(base, { url, method = 'GET', data, redirectOnAuth = true, timeout = 15000, auth = true }) {
+  const token = auth ? wx.getStorageSync('token') : '';
   return new Promise((resolve, reject) => {
     wx.request({
       url: base + url,
       method,
       data,
       timeout,
+      enableHttp2: false,
+      enableQuic: false,
       header: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: 'Bearer ' + token } : {}),
@@ -34,21 +36,18 @@ function requestOnce(base, { url, method = 'GET', data, redirectOnAuth = true, t
         const message = res.data && res.data.error && res.data.error.message;
         reject(new Error(message || '请求失败'));
       },
-      fail() {
-        reject(new Error('网络异常，请确认后端已启动'));
+      fail(err) {
+        console.error('fail:', JSON.stringify(err));
+        const error = new Error((err && err.errMsg) || '网络异常，请确认后端已启动');
+        error.network = true;
+        reject(error);
       },
     });
   });
 }
 
-function request(options, retried) {
-  return getBase().then((base) => requestOnce(base, options)).catch((err) => {
-    if (retried || !err || err.message !== '网络异常，请确认后端已启动') throw err;
-    apiBaseUtil.markBroken();
-    const app = typeof getApp === 'function' ? getApp() : null;
-    const again = app && app.autoSelect ? app.autoSelect(true) : apiBaseUtil.resolve(true);
-    return Promise.resolve(again).then(() => request(options, true));
-  });
+function request(options) {
+  return getBase().then((base) => requestOnce(base, options));
 }
 
 function uploadFile(filePath) {
@@ -58,6 +57,8 @@ function uploadFile(filePath) {
       url: base + '/api/upload',
       filePath,
       name: 'file',
+      enableHttp2: false,
+      enableQuic: false,
       header: token ? { Authorization: 'Bearer ' + token } : {},
       success(res) {
         let data = {};

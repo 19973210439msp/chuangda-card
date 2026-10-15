@@ -1,19 +1,19 @@
+<image class="bg-img" src="/assets/bg-plain.jpg" mode="aspectFill"></image>
 <nav-bar title="我的"></nav-bar>
 <scroll-view class="mine-scroll" scroll-y style="height: {{scrollHeight}}px">
   <view class="mine-body">
     <view class="error" wx:if="{{error}}">{{error}}</view>
     <view class="group">
-      <view class="row" bindtap="onAccounts">
+      <view class="row" bindtap="onPhone">
         <image class="ico" src="/assets/icons/switch-account.png" mode="aspectFit"></image>
-        <text class="name">账号管理</text>
+        <text class="name">手机账号</text>
         <text class="value">{{phoneText || '未绑定'}}</text>
         <image class="chev" src="/assets/icons/arrow-right.png" mode="aspectFit"></image>
       </view>
-      <view class="row" bindtap="onEmail">
-        <image class="ico" src="/assets/icons/mail.png" mode="aspectFit"></image>
-        <text class="name">修改绑定邮箱</text>
-        <text class="bind" wx:if="{{!email}}">绑定</text>
-        <text class="value" wx:else>{{emailText}}</text>
+      <view class="row" bindtap="onCert">
+        <image class="ico" src="/assets/icons/card-style.png" mode="aspectFit"></image>
+        <text class="name">企业认证</text>
+        <text class="value">{{certText}}</text>
         <image class="chev" src="/assets/icons/arrow-right.png" mode="aspectFit"></image>
       </view>
       <view class="row" bindtap="onClose">
@@ -21,10 +21,6 @@
         <text class="name">注销账号</text>
         <image class="chev" src="/assets/icons/arrow-right.png" mode="aspectFit"></image>
       </view>
-    </view>
-    <view class="net-box" bindtap="onNetTap">
-      <text class="net-line">后端：{{apiBase}}（{{apiSource}}）</text>
-      <text class="net-tip">点击可手动改地址，清空保存则恢复自动选路</text>
     </view>
   </view>
 </scroll-view>

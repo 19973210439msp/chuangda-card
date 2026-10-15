@@ -1,0 +1,33 @@
+<nav-bar title="{{title}}"></nav-bar>
+<scroll-view class="sub-scroll" scroll-y style="height: {{scrollHeight}}px">
+  <view class="sub-body">
+    <view class="error" wx:if="{{error}}">{{error}}</view>
+    <block wx:if="{{mode === 'switch'}}">
+      <text class="desc">选择一张已有名片，首页会换成这一张。</text>
+      <view class="card-item" wx:for="{{cards}}" wx:key="id" data-id="{{item.id}}" bindtap="onPick">
+        <view class="card-head">
+          <text class="tpl">{{item.templateLabel}}{{item.isDefault ? ' · 导入默认' : ''}}</text>
+          <view class="head-actions">
+            <text class="current" wx:if="{{item.id === activeCardId}}">当前</text>
+            <text class="remove" wx:if="{{cards.length > 1}}" data-id="{{item.id}}" catchtap="onDelete">删除</text>
+          </view>
+        </view>
+        <card-view card="{{item.preview}}" company="{{item.brand}}"></card-view>
+        <text class="meta">{{item.name || '未填写姓名'}}  {{item.phone || '未填手机号'}}</text>
+      </view>
+      <text class="desc" wx:if="{{!cards.length}}">还没有可切换的名片。</text>
+    </block>
+    <view class="create" wx:else>
+      <text class="label">选择名片样式</text>
+      <text class="desc">完成子公司认证后，这里会显示该企业分配的模板。选好样式后可创建并填写名片。</text>
+      <view class="style-item {{draftTemplate === item.id && draftCompanyId === item.companyId ? 'on' : ''}}" wx:for="{{templates}}" wx:key="key" data-template="{{item.id}}" data-company="{{item.companyId}}" bindtap="onTemplate">
+        <view class="card-head">
+          <view><text class="tpl">{{item.label}}</text><text class="template-company" wx:if="{{item.companyId}}">{{item.companyName}}</text></view>
+          <text class="current" wx:if="{{draftTemplate === item.id && draftCompanyId === item.companyId}}">已选</text>
+        </view>
+        <card-view card="{{item.preview}}" company="{{item.brand}}"></card-view>
+      </view>
+      <button class="primary" bindtap="onCreate" loading="{{creating}}">创建并填写</button>
+    </view>
+  </view>
+</scroll-view>

@@ -3,13 +3,26 @@ const { asyncRoute, httpError } = require('../lib/errors');
 const { requireEmployee } = require('../lib/access');
 const { getStore } = require('../storage');
 const { toSelf } = require('../lib/person');
-const { normalizePhone, normalizeEmail, assertMobile, assertEmail } = require('../lib/validate');
+const { text, normalizePhone, normalizeEmail, assertMobile, assertEmail } = require('../lib/validate');
 const { issueCode } = require('../lib/verify');
 const { smsReady, sendVerificationSms } = require('../lib/sms');
 const { mailReady, sendVerificationEmail } = require('../lib/mail');
-const { changePhone, changeEmail, closeAccount } = require('../lib/contact');
+const { changePhone, changeEmail, closeAccount, listLinkedAccounts, switchLinkedAccount } = require('../lib/contact');
 
 const router = express.Router();
+
+router.get('/phones', asyncRoute(async (req, res) => {
+  const user = requireEmployee(req);
+  res.json({ items: await listLinkedAccounts(getStore(), user) });
+}));
+
+router.post('/switch', asyncRoute(async (req, res) => {
+  const user = requireEmployee(req);
+  const personId = text(req.body && req.body.personId, 64);
+  if (!personId) throw httpError(400, 'VALIDATION_ERROR', '请选择要切换的账号');
+  const saved = await switchLinkedAccount(getStore(), user, personId, req.auth && req.auth.token);
+  res.json({ employee: toSelf(saved.employee) });
+}));
 
 router.post('/phone/code', asyncRoute(async (req, res) => {
   const user = requireEmployee(req);
@@ -35,7 +48,11 @@ router.put('/phone', asyncRoute(async (req, res) => {
   const user = requireEmployee(req);
   const store = getStore();
   const saved = await changePhone(store, user, req.body || {}, req.auth && req.auth.token);
-  res.json({ employee: toSelf(saved.employee), claimed: saved.claimed });
+  res.json({
+    employee: toSelf(saved.employee),
+    claimed: !!saved.claimed,
+    loggedIn: !!saved.loggedIn,
+  });
 }));
 
 router.post('/email/code', asyncRoute(async (req, res) => {

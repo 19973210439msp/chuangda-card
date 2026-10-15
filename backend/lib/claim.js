@@ -6,7 +6,7 @@ function shellIsBlank(person) {
   if (!person) return true;
   const attachments = Array.isArray(person.attachments) ? person.attachments : [];
   return !person.name && !person.email && !person.wechat && !person.title
-    && !person.avatar && !person.portrait && !attachments.length;
+    && !attachments.length;
 }
 
 async function claimImportedCard(store, { phone, openid, shell, sessionToken }) {

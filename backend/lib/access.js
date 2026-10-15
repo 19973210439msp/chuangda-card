@@ -21,15 +21,43 @@ function assertAdminConfigured() {
   adminCredentials();
 }
 
-async function createSession(store, userId, role) {
+function hashPassword(password) {
+  return crypto.createHash('sha256').update(String(password)).digest('hex');
+}
+
+function adminSecretStamp() {
+  return hashPassword(adminCredentials().password);
+}
+
+function sessionTtlMs(role) {
+  if (role === 'admin') {
+    const n = Number(process.env.ADMIN_SESSION_MS);
+    return Number.isFinite(n) && n > 0 ? n : 12 * 60 * 60 * 1000;
+  }
+  const n = Number(process.env.EMPLOYEE_SESSION_MS);
+  return Number.isFinite(n) && n > 0 ? n : 7 * 24 * 60 * 60 * 1000;
+}
+
+async function createSession(store, userId, role, secretStamp) {
   const session = {
     token: crypto.randomBytes(24).toString('hex'),
     userId,
     role,
     createdAt: nowIso(),
+    expiresAt: new Date(Date.now() + sessionTtlMs(role)).toISOString(),
+    secretStamp: secretStamp || (role === 'admin' ? adminSecretStamp() : ''),
   };
   await store.createSession(session);
   return session;
+}
+
+function sessionIsValid(session) {
+  if (!session) return false;
+  if (!session.expiresAt || Date.parse(session.expiresAt) <= Date.now()) return false;
+  if (session.role === 'admin' && (!session.userId || session.userId === 'admin')) {
+    if (!session.secretStamp || session.secretStamp !== adminSecretStamp()) return false;
+  }
+  return true;
 }
 
 function requireUser(req) {
@@ -57,7 +85,9 @@ module.exports = {
   safeEqual,
   adminCredentials,
   assertAdminConfigured,
+  hashPassword,
   createSession,
+  sessionIsValid,
   requireUser,
   requireAdmin,
   requireEmployee,

@@ -1,82 +1,49 @@
 const { request } = require('../../utils/request');
 const { ensureLogin } = require('../../utils/guard');
 const { pageScrollHeight } = require('../../utils/util');
-const apiBaseUtil = require('../../utils/api-base');
 const accounts = require('../../utils/accounts');
 
 Page({
   data: {
     employee: null,
     phoneText: '',
-    email: '',
-    emailText: '',
+    certText: '未认证',
     error: '',
     scrollHeight: 600,
-    apiBase: '',
-    apiSource: '',
   },
   onLoad() {
     this.setData({ scrollHeight: pageScrollHeight() });
-    this.syncApiBase();
-  },
-  syncApiBase() {
-    const app = getApp();
-    const sync = () => {
-      const base = (app.globalData && app.globalData.apiBase) || '';
-      this.setData({
-        apiBase: base,
-        apiSource: base.indexOf('cpolar') > -1 ? '公网穿透' : '局域网',
-      });
-    };
-    sync();
-    if (app.globalData && app.globalData.apiReady) app.globalData.apiReady.then(sync);
-  },
-  onNetTap() {
-    wx.showModal({
-      title: '后端地址',
-      content: this.data.apiBase,
-      editable: true,
-      placeholderText: 'http://xxx.cpolar.top',
-      confirmText: '保存',
-      success: (res) => {
-        if (!res.confirm) return;
-        const value = (res.content || '').trim();
-        const app = getApp();
-        if (!value) {
-          apiBaseUtil.clearOverride();
-          app.autoSelect(true).then(() => {
-            this.syncApiBase();
-            wx.showToast({ title: '已恢复自动', icon: 'none' });
-          });
-          return;
-        }
-        apiBaseUtil.setOverride(value);
-        app.globalData.apiBase = value.replace(/\/$/, '');
-        app.globalData.apiReady = Promise.resolve(app.globalData.apiBase);
-        this.syncApiBase();
-        wx.showToast({ title: '已切换', icon: 'none' });
-      },
-    });
   },
   onShow() {
     if (!ensureLogin()) return;
     request({ url: '/api/employee/me' }).then((data) => {
       const employee = data.employee || {};
+      const cardId = employee.activeCardId || '';
       accounts.remember(employee);
+      const certRequest = cardId
+        ? request({ url: '/api/employee/certification?cardId=' + encodeURIComponent(cardId) })
+        : Promise.resolve({});
+      return Promise.all([Promise.resolve(employee), certRequest]);
+    }).then(([employee, cert]) => {
+      const certified = (cert && cert.certified) || [];
+      const pending = (cert && cert.pending) || [];
+      let certText = '未认证';
+      if (certified.length > 1) certText = '已认证' + certified.length + '家';
+      else if (certified.length === 1) certText = '已认证';
+      else if (pending.length) certText = '审核中';
       this.setData({
         employee,
-        phoneText: accounts.maskPhone(employee.phone),
-        email: employee.email || '',
-        emailText: employee.email || '',
+        phoneText: accounts.maskPhone(employee.authPhone || employee.phone),
+        certText,
         error: '',
       });
     }).catch((err) => this.setData({ error: err.message }));
   },
-  onAccounts() {
-    wx.navigateTo({ url: '/pages/mine/accounts' });
+  onPhone() {
+    wx.navigateTo({ url: '/pages/mine/phone' });
   },
-  onEmail() {
-    wx.navigateTo({ url: '/pages/mine/bind?type=email' });
+  onCert() {
+    wx.navigateTo({ url: '/pages/mine/cert' });
   },
   onClose() {
     wx.showModal({

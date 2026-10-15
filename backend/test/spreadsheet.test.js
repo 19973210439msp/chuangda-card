@@ -1,7 +1,8 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const XLSX = require('xlsx');
-const { rowsFromSpreadsheet } = require('../lib/spreadsheet');
+const JSZip = require('jszip');
+const { rowsFromSpreadsheet, rowsFromDocx } = require('../lib/spreadsheet');
 
 test('xlsx import reads Chinese headers and keeps the phone as text', () => {
   const sheet = XLSX.utils.aoa_to_sheet([
@@ -19,4 +20,35 @@ test('xlsx import reads Chinese headers and keeps the phone as text', () => {
   assert.equal(rows[0].phone, '19116390887');
   assert.equal(rows[0].qr, 'https://example.com/qr.png');
   assert.equal(rows[1].phone, '');
+});
+
+test('docx import reads the first table and Chinese headers', async () => {
+  const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>姓名</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>职位</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>手机号</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>邮箱</w:t></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>陈美</w:t><w:t>秀</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>顾问</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>19116390887</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>a@b.cn</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>`;
+  const zip = new JSZip();
+  zip.file('word/document.xml', xml);
+  const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+  const rows = await rowsFromDocx(buffer);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].name, '陈美秀');
+  assert.equal(rows[0].title, '顾问');
+  assert.equal(rows[0].phone, '19116390887');
+  assert.equal(rows[0].email, 'a@b.cn');
 });

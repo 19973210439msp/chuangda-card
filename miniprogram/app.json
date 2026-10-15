@@ -4,24 +4,25 @@
     "pages/home/index",
     "pages/holder/index",
     "pages/mine/index",
-    "pages/mine/bind",
-    "pages/mine/accounts",
+    "pages/mine/phone",
+    "pages/mine/cert",
     "pages/home/edit",
+    "pages/home/switch",
     "pages/holder/scan",
     "pages/client/card",
     "pages/employee/stats"
   ],
   "window": {
     "navigationStyle": "custom",
-    "navigationBarBackgroundColor": "#182850",
+    "navigationBarBackgroundColor": "#CDD4E3",
     "navigationBarTitleText": "创大产控",
-    "navigationBarTextStyle": "white",
-    "backgroundColor": "#ffffff",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#CDD4E3",
     "backgroundTextStyle": "dark"
   },
   "tabBar": {
     "color": "#8a9099",
-    "selectedColor": "#182850",
+    "selectedColor": "#0F2859",
     "backgroundColor": "#ffffff",
     "borderStyle": "white",
     "list": [

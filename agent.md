@@ -21,9 +21,9 @@
 
 - 小程序登录：只能微信授权；测试可跳过。管理员只在网页后台用工号登录
 - 首页先看自己的名片，点编辑再改
-- 编辑字段：头像、形象照、姓名、公司、职业、手机号、微信号、邮箱、地址、名片附件
+- 编辑字段：姓名、公司、职业、手机号、微信号、邮箱、地址、名片附件（不再支持头像 / 形象照）
 - 名片夹：收藏他人名片；拍摄纸质名片识别后存入名片夹
-- 我的：切换账号、修改手机号、修改邮箱、注销账号
+- 我的：展示当前微信授权手机号（不可切换多账号）、注销账号；邮箱在编辑页直接改
 
 技术：
 
@@ -58,12 +58,12 @@
 
 | 端 | 规则 |
 |----|------|
-| 小程序 | **只能微信授权**。`wx.login` → `POST /api/auth/wechat`。不提供工号登录 |
+| 小程序 | **只能登录时微信授权手机号**。`getPhoneNumber` + `wx.login` → `POST /api/auth/wechat`（带 `phoneCode`）。用手机号匹配管理员已导入员工并直接领取名片；未匹配则建空白名片。编辑页手机号只读，不可再次授权换号（避免重复计费） |
 | 网页管理后台 | **只能管理员账号登录**。沿用 `POST /api/login`，不走微信 |
-| 测试 | `SKIP_WECHAT_AUTH=true` 且 `NODE_ENV` 不是 `production` 时，小程序可跳过微信授权 |
-| 正式发布 | `SKIP_WECHAT_AUTH` 必须为 false。小程序未授权不能进首页、名片夹、我的 |
+| 测试 | `SKIP_WECHAT_AUTH=true` 且 `NODE_ENV` 不是 `production` 时，小程序可跳过微信授权；可用 `phoneCode: "dev:13800138000"` 测领取 |
+| 正式发布 | `SKIP_WECHAT_AUTH` 必须为 false。正式环境缺少手机号授权会返回 `PHONE_REQUIRED` |
 
-切换账号只在小程序里：退出当前微信会话后再授权登录，不要把两个身份叠在一个 token 上。员工不能在小程序里用管理员账号进入后台。
+一微信对应登录时授权的一个手机号；「我的」只展示该号，不做多账号切换。换号需退出后重新微信授权登录。员工不能在小程序里用管理员账号进入后台。
 
 ---
 
@@ -77,11 +77,11 @@
 | `miniprogram/pages/home/edit` | 编辑第 1 节字段和附件 |
 | `miniprogram/pages/holder/index` | 名片夹 |
 | `miniprogram/pages/holder/scan` | 拍名片识别 |
-| `miniprogram/pages/mine/index` | 切换账号、改手机号、改邮箱、注销 |
+| `miniprogram/pages/mine/index` | 展示绑定手机号、注销 |
 | `miniprogram/pages/client/card` | 保留：客户看名片、拨号、存通讯录、加微信、交换、埋点 |
 | `miniprogram/pages/employee/stats` | 保留：我的数据 / 兴趣指数，不单独占 Tab |
 
-形象照和头像是两个字段。
+头像、形象照字段已移除；PostgreSQL `people.data` 与 OSS `uploads/` 中对应对象会在启动迁移时清理。
 
 ---
 
@@ -112,12 +112,10 @@ miniprogram/pages/mine/index.*
 | 方法 | 路径 | 作用 |
 |------|------|------|
 | POST | `/api/auth/wechat` | 微信 code 登录 |
-| POST | `/api/auth/logout` | 退出，用于切换账号 |
-| GET/PUT | `/api/employee/me` | 查看 / 保存我的名片（补形象照、附件等字段） |
+| POST | `/api/auth/logout` | 退出登录 |
+| GET/PUT | `/api/employee/me` | 查看 / 保存我的名片（姓名、联系方式、附件等；无头像/形象照） |
 | GET/POST | `/api/holder` | 名片夹列表 / 收藏（body 要有 `cardId`） |
 | POST | `/api/holder/recognize` | 上传名片照片，返回识别草稿，确认后再入库 |
-| PUT | `/api/account/phone` | 修改手机号，必须先校验短信验证码 |
-| PUT | `/api/account/email` | 修改邮箱，必须先校验邮箱验证码 |
 | POST | `/api/account/close` | 注销：停用账号并下架对外名片，不物理删除 |
 
 埋点和兴趣指数继续用 README 的 `/api/analytics/*`，不要另做一套统计。
@@ -133,7 +131,7 @@ miniprogram/pages/mine/index.*
 5. 不删除管理后台、H5 公开页、埋点和兴趣指数。
 6. 小程序不要做工号登录；网页后台不要做微信登录。
 7. 拍名片识别走腾讯云名片识别；未配置密钥时接口返回未配置，不要换一家厂商。
-8. 改手机号、邮箱未通过验证码不得写入。
+8. 手机号仅登录时微信授权；编辑页可直接改邮箱，不再要求邮箱验证码。
 9. 注销只停用，不删名片正文、埋点、OSS 引用。
 
 ---
@@ -144,9 +142,9 @@ miniprogram/pages/mine/index.*
 
 用 **腾讯云名片识别**（`OCR_PROVIDER=tencent`）。小程序只上传照片；后端调用识别，把草稿返回给用户核对，用户确认后再写入名片夹。密钥放环境变量 `TENCENT_SECRET_ID`、`TENCENT_SECRET_KEY`。没配密钥时返回「识别未配置」，不要在小程序里写死密钥，也不要改接其他厂商。
 
-### 修改手机号、邮箱
+### 手机号与邮箱
 
-要验证码。新手机号走短信验证码，新邮箱走邮件验证码。验证通过后再 `PUT` 保存。名片上的手机号、邮箱与「我的」里修改的是同一份账号资料，保存后首页名片一起变。
+手机号仅在登录时通过微信授权获取与更换（退出后重新授权登录）。编辑页可直接填写邮箱，无需验证码；「我的」不再提供邮箱绑定入口。
 
 ### 注销
 

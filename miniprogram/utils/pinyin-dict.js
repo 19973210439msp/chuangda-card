@@ -1,0 +1,1 @@
+module.exports=Object.assign({}, require('./pinyin-part-0'), require('./pinyin-part-1'), require('./pinyin-part-2'), require('./pinyin-part-3'), require('./pinyin-part-4'), require('./pinyin-part-5'), require('./pinyin-part-6'), require('./pinyin-part-7'));

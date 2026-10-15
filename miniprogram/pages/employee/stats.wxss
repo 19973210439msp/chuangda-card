@@ -14,7 +14,7 @@
   margin-bottom: 16rpx;
   color: #182850;
   font-size: 28rpx;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .empty {
@@ -40,7 +40,7 @@
 .who {
   display: block;
   color: #182850;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .sub {
@@ -54,5 +54,17 @@
   margin-left: 16rpx;
   color: #c82423;
   font-size: 22rpx;
-  font-weight: 700;
+  font-weight: 600;
+}
+
+.more {
+  margin-top: 24rpx;
+  background: #f4f6f9;
+  color: #182850;
+  font-size: 26rpx;
+  border-radius: 12rpx;
+}
+
+.more::after {
+  border: none;
 }

@@ -129,16 +129,44 @@ fs.writeFileSync(path.join(dir, 'delete-bin.png'), png(64, (x, y) => (trash(x, y
 fs.writeFileSync(path.join(dir, 'switch-account.png'), png(64, (x, y) => (arrows(x, y) ? ink : null)));
 fs.writeFileSync(path.join(dir, 'phone.png'), png(64, (x, y) => (phone(x, y) ? ink : null)));
 fs.writeFileSync(path.join(dir, 'mail.png'), png(64, (x, y) => (mail(x, y) ? ink : null)));
-function arrowLeft(x, y) {
-  return nearSegment(x, y, 40, 14, 22, 32, 2.6)
-    || nearSegment(x, y, 22, 32, 40, 50, 2.6);
-}
-
 function arrowRight(x, y) {
   return nearSegment(x, y, 24, 14, 42, 32, 2.6)
     || nearSegment(x, y, 42, 32, 24, 50, 2.6);
 }
 
+function pointInPoly(x, y, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i, i += 1) {
+    const xi = poly[i][0];
+    const yi = poly[i][1];
+    const xj = poly[j][0];
+    const yj = poly[j][1];
+    const intersect = ((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / ((yj - yi) || 1e-9) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function remixArrowLeft(size) {
+  const raw = [
+    [7.82843, 10.9999], [20, 10.9999], [20, 12.9999], [7.82843, 12.9999],
+    [13.1924, 18.3638], [11.7782, 19.778], [4, 11.9999], [11.7782, 4.22168], [13.1924, 5.63589],
+  ];
+  const pad = Math.round(size * 0.22);
+  const scale = (size - pad * 2) / 24;
+  const poly = raw.map(([px, py]) => [pad + px * scale, pad + py * scale]);
+  return png(size, (x, y) => {
+    let hits = 0;
+    for (let sy = 0; sy < 4; sy += 1) {
+      for (let sx = 0; sx < 4; sx += 1) {
+        if (pointInPoly(x + (sx + 0.5) / 4, y + (sy + 0.5) / 4, poly)) hits += 1;
+      }
+    }
+    if (!hits) return null;
+    return [0, 0, 0, Math.round(255 * hits / 16)];
+  });
+}
+
 fs.writeFileSync(path.join(dir, 'logout.png'), png(64, (x, y) => (logout(x, y) ? ink : null)));
-fs.writeFileSync(path.join(dir, 'arrow-left.png'), png(64, (x, y) => (arrowLeft(x, y) ? white : null)));
+fs.writeFileSync(path.join(dir, 'arrow-left.png'), remixArrowLeft(128));
 fs.writeFileSync(path.join(dir, 'arrow-right.png'), png(64, (x, y) => (arrowRight(x, y) ? [200, 205, 212, 255] : null)));

@@ -9,8 +9,6 @@ function mediaUrl(url) {
 function decorateCard(card) {
   if (!card) return null;
   return Object.assign({}, card, {
-    portraitSrc: mediaUrl(card.portrait),
-    avatarSrc: mediaUrl(card.avatar),
     initial: (card.name || '名').slice(0, 1),
     roleText: [card.department, card.title].filter(Boolean).join(' · '),
   });
@@ -18,13 +16,14 @@ function decorateCard(card) {
 
 function decorateCompany(company) {
   if (!company) return null;
-  return Object.assign({}, company, { logoSrc: mediaUrl(company.logo) });
+  return Object.assign({}, company, { logoSrc: mediaUrl(company.logo), qrSrc: company.qrUrl ? mediaUrl(company.qrUrl) : '/assets/official-qr.jpg' });
 }
 
 function pageScrollHeight() {
   const system = wx.getSystemInfoSync();
-  const navHeight = (system.statusBarHeight || 20) + 44;
-  const windowHeight = system.windowHeight || system.screenHeight;
+  const statusBarHeight = system.statusBarHeight || 20;
+  const navHeight = statusBarHeight + 44;
+  const screenHeight = system.screenHeight || system.windowHeight;
   let route = '';
   try {
     const pages = getCurrentPages();
@@ -32,11 +31,14 @@ function pageScrollHeight() {
   } catch (err) {
     route = '';
   }
-  const nativeTab = route === 'pages/home/index' || route === 'pages/holder/index' || route === 'pages/mine/index';
-  const login = !route || route === 'pages/login/index';
-  const safe = system.safeArea ? Math.max(system.screenHeight - system.safeArea.bottom, 0) : 0;
-  const tabBar = nativeTab || login ? 0 : 50 + safe;
-  return Math.max(windowHeight - navHeight - tabBar, 320);
+  const withTab = route === 'pages/home/edit'
+    || route === 'pages/holder/scan'
+    || route === 'pages/employee/stats';
+  const safe = system.safeArea ? Math.max(screenHeight - system.safeArea.bottom, 0) : 0;
+  const rpx = (system.screenWidth || 375) / 750;
+  const customTab = Math.round(100 * rpx) + safe;
+  const tabBar = withTab ? customTab : 0;
+  return Math.max(screenHeight - navHeight - tabBar, 320);
 }
 
 function visitorId() {

@@ -20,7 +20,7 @@ Page({
     ]).then(([me, company, summary]) => {
       this.setData({
         card: decorateCard(me.employee),
-        company: decorateCompany(company.company),
+        company: decorateCompany(me.templateCompany || company.company),
         summary: (summary.items && summary.items[0]) || {
           interestIndex: 0,
           views: 0,
@@ -36,14 +36,32 @@ Page({
   onFlip() {
     this.setData({ flipped: !this.data.flipped });
   },
+  onSwitch() {
+    wx.navigateTo({ url: '/pages/home/switch?mode=switch' });
+  },
+  onStyle() {
+    wx.navigateTo({ url: '/pages/home/switch?mode=style' });
+  },
   onEdit() {
     wx.navigateTo({ url: '/pages/home/edit' });
   },
   onBindPhone() {
-    wx.navigateTo({ url: '/pages/mine/bind?type=phone' });
+    wx.showModal({
+      title: '需要重新登录',
+      content: '手机号仅在登录时通过微信授权获取。是否退出并重新授权登录？',
+      confirmText: '去登录',
+      success: (res) => {
+        if (!res.confirm) return;
+        wx.removeStorageSync('token');
+        wx.reLaunch({ url: '/pages/login/index' });
+      },
+    });
   },
   onViews() {
-    wx.navigateTo({ url: '/pages/employee/stats' });
+    wx.navigateTo({ url: '/pages/employee/stats?mode=views' });
+  },
+  onVisitors() {
+    wx.navigateTo({ url: '/pages/employee/stats?mode=visitors' });
   },
   onCopy() {
     const card = this.data.card;
@@ -51,7 +69,8 @@ Page({
       wx.showToast({ title: '名片还在加载', icon: 'none' });
       return;
     }
-    const link = apiBaseUtil.current() + '/card.html?cardId=' + card.id;
+    const link = apiBaseUtil.current() + '/card.html?cardId=' + card.id
+      + (card.activeCardId ? '&shareCard=' + encodeURIComponent(card.activeCardId) : '');
     wx.setClipboardData({
       data: link,
       success: () => wx.showToast({ title: '链接已复制', icon: 'success' }),
@@ -65,8 +84,8 @@ Page({
   onShareAppMessage() {
     const card = this.data.card || {};
     return {
-      title: (card.name || '创大产控') + '的电子名片',
-      path: '/pages/client/card?cardId=' + card.id,
+      title: '这是我的数字名片，望惠存',
+      path: '/pages/client/card?cardId=' + card.id + (card.activeCardId ? '&shareCard=' + card.activeCardId : ''),
     };
   },
 });

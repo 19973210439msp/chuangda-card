@@ -1,8 +1,173 @@
-.seal {
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: 50%;
+.login-page {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 56rpx 48rpx 0;
   background: #ffffff;
 }
-.h1 { margin-top: 24rpx; }
-.primary::after { border: none; }
+
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.seal {
+  flex: 0 0 auto;
+  width: 112rpx;
+  height: 112rpx;
+  overflow: hidden;
+  background: transparent;
+}
+
+.seal-img {
+  width: 144rpx;
+  height: 144rpx;
+  margin-left: -16rpx;
+  margin-top: -16rpx;
+}
+
+.brand-copy {
+  min-width: 0;
+  margin-top: 24rpx;
+}
+
+.brand-copy .h1 {
+  display: block;
+  color: #182850;
+  font-size: 40rpx;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.brand-desc {
+  display: block;
+  margin-top: 8rpx;
+  color: #737d90;
+  font-size: 24rpx;
+  line-height: 1.55;
+}
+
+.login-main {
+  margin-top: 112rpx;
+  text-align: center;
+}
+
+.login-title {
+  display: block;
+  color: #182850;
+  font-size: 52rpx;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 2rpx;
+}
+
+.login-desc {
+  display: block;
+  margin-top: 20rpx;
+  color: #657086;
+  font-size: 28rpx;
+  line-height: 1.65;
+}
+
+.login-primary {
+  display: block;
+  width: 100%;
+  height: 96rpx;
+  margin: 52rpx 0 0;
+  padding: 0 24rpx;
+  box-sizing: border-box;
+  border: 1rpx solid #182850;
+  border-radius: 10rpx;
+  background: #182850;
+  color: #ffffff;
+  font-size: 32rpx;
+  font-weight: 600;
+  line-height: 96rpx;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.login-primary::after,
+.dev-link::after {
+  border: none;
+}
+
+.login-hint {
+  display: block;
+  margin-top: 22rpx;
+  color: #8791a3;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.login-main .error {
+  margin: 28rpx 0 -20rpx;
+  text-align: left;
+}
+
+.dev-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  margin-top: 112rpx;
+}
+
+.dev-rule {
+  width: 120rpx;
+  height: 1rpx;
+  background: #d9dfe8;
+}
+
+.dev-label {
+  margin: 0 20rpx;
+  color: #929bad;
+  font-size: 22rpx;
+  line-height: 1.5;
+}
+
+.dev-link {
+  width: auto;
+  height: 64rpx;
+  margin: 18rpx 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #29477d;
+  font-size: 26rpx;
+  font-weight: 500;
+  line-height: 64rpx;
+  text-decoration: underline;
+}
+
+.login-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  min-height: 96rpx;
+  margin: auto -48rpx 0;
+  padding: 24rpx 48rpx calc(24rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  background: #182850;
+}
+
+.login-footer .bars {
+  width: 76rpx;
+  height: 48rpx;
+}
+
+.login-footer .bars .b {
+  width: 12rpx;
+}
+
+.login-footer .bars .b1 { height: 14rpx; }
+.login-footer .bars .b2 { height: 24rpx; }
+.login-footer .bars .b3 { height: 36rpx; }
+.login-footer .bars .b4 { height: 46rpx; }
+
+.login-footer .slogan {
+  font-size: 24rpx;
+}

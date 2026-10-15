@@ -1,31 +1,34 @@
-<nav-bar title="名片"></nav-bar>
+<image class="bg-img" src="/assets/bg-card.jpg" mode="aspectFill"></image>
+<nav-bar title="创大产控"></nav-bar>
 <scroll-view class="sub-scroll" scroll-y style="height: {{scrollHeight}}px">
 <view class="sub-body">
   <view class="error" wx:if="{{error}}">{{error}}</view>
+  <view class="page-head">
+    <view class="page-mark"></view>
+    <view class="page-head-copy">
+      <text class="page-title">电子名片</text>
+      <text class="page-en">DIGITAL BUSINESS CARD</text>
+    </view>
+  </view>
   <view class="shell" wx:if="{{card}}">
     <view class="card-wrap">
       <card-view card="{{card}}" company="{{company}}" flipped="{{flipped}}"></card-view>
-      <view class="flip" bindtap="onFlip">{{flipped ? '正面' : '翻面'}}</view>
+      <text class="flip-hint" bindtap="onFlip">点击名片翻面 · TAP TO FLIP</text>
     </view>
     <view class="saved" wx:if="{{favorited}}">已收入名片夹，可在「名片夹」里查看</view>
     <view class="ops">
-      <view class="op" wx:if="{{card.phone}}" bindtap="onCall">
-        <image src="/assets/icons/phone-action.png" mode="aspectFit"></image>
+      <view class="op op-call" bindtap="onCall">
+        <image src="/assets/icons/phone-action-light.png" mode="aspectFit"></image>
         <text>拨打电话</text>
       </view>
       <view class="op" bindtap="onSaveContact">
         <image src="/assets/icons/save-contact.png" mode="aspectFit"></image>
         <text>保存联系人</text>
       </view>
-      <view class="op" wx:if="{{card.wechat}}" bindtap="onWechat">
-        <image src="/assets/icons/wechat-action.png" mode="aspectFit"></image>
-        <text>加微信</text>
-      </view>
-      <view class="op">
-        <button class="op-share" open-type="share">
-          <image src="/assets/icons/share-action.png" mode="aspectFit"></image>
-          <text>分享名片</text>
-        </button>
+      <view class="op op-share-wrap">
+        <image src="/assets/icons/share-action.png" mode="aspectFit"></image>
+        <text>分享名片</text>
+        <button class="op-share" open-type="share" hover-class="none"></button>
       </view>
       <view class="op" bindtap="onExchange">
         <image src="/assets/icons/exchange-action.png" mode="aspectFit"></image>
@@ -35,6 +38,11 @@
         <image src="/assets/icons/star-action.png" mode="aspectFit"></image>
         <text>收藏名片</text>
       </view>
+    </view>
+    <view class="intro">
+      <text class="intro-title">企业介绍</text>
+      <text class="intro-name">上海创大产控高新技术集团有限公司</text>
+      <text class="intro-text">简称“创大高新集团”，以产业服务为核心、科研赋能为驱动、市场运营为支撑、资本助力为保障的高新技术集团。致力于以产业需求和“逆向科研”相结合，通过市场化与资本化运作模式，依托集团科研股东背景及产业发展经验，搭建高校与企业、企业与企业、企业与政府、政府与高校沟通桥梁，整合高校科研资源与产业需求，构建“政产学研融”五位一体的产业生态体系，致力于成为具有投资能力的科研经纪产业领军企业。</text>
     </view>
   </view>
   <view class="exchange" wx:if="{{exchangeOpen}}">
@@ -50,4 +58,3 @@
   </view>
 </view>
 </scroll-view>
-<app-tab></app-tab>

@@ -1,6 +1,7 @@
 const { request } = require('../../utils/request');
 const { ensureLogin } = require('../../utils/guard');
 const { pageScrollHeight } = require('../../utils/util');
+const { compareByPinyin } = require('../../utils/pinyin');
 
 const PIN_KEY = 'holderPins';
 
@@ -10,7 +11,7 @@ function readPins() {
 }
 
 Page({
-  data: { items: [], error: '', scrollHeight: 600 },
+  data: { items: [], allItems: [], keyword: '', error: '', scrollHeight: 600 },
   onLoad() {
     const system = wx.getSystemInfoSync();
     this.actionWidth = Math.round(system.windowWidth / 750 * 280);
@@ -22,8 +23,22 @@ Page({
   },
   load() {
     request({ url: '/api/holder' }).then((data) => {
-      this.setData({ items: this.withPins(data.items || []), error: '' });
+      const allItems = this.withPins(data.items || []);
+      this.setData({ allItems, items: this.applyKeyword(allItems), error: '' });
     }).catch((err) => this.setData({ error: err.message }));
+  },
+  applyKeyword(items, keyword) {
+    const source = keyword == null ? this.data.keyword : keyword;
+    const query = String(source || '').trim().toLowerCase();
+    if (!query) return items;
+    return items.filter((item) => {
+      const card = item.card || {};
+      return [card.name, card.company, card.title, card.phone].join('\n').toLowerCase().indexOf(query) >= 0;
+    });
+  },
+  onSearch(event) {
+    const keyword = event.detail.value || '';
+    this.setData({ keyword, items: this.applyKeyword(this.data.allItems, keyword) });
   },
   withPins(items) {
     const pins = readPins();
@@ -36,7 +51,10 @@ Page({
     })).sort((a, b) => {
       const ar = rank.has(a.cardId) ? rank.get(a.cardId) : pins.length;
       const br = rank.has(b.cardId) ? rank.get(b.cardId) : pins.length;
-      return ar - br;
+      if (ar !== br) return ar - br;
+      const an = ((a.card && a.card.name) || '').trim();
+      const bn = ((b.card && b.card.name) || '').trim();
+      return compareByPinyin(an, bn);
     });
   },
   onScan() {
@@ -97,7 +115,8 @@ Page({
     const pins = readPins().filter((item) => item !== id);
     if (!pinned) pins.unshift(id);
     wx.setStorageSync(PIN_KEY, pins);
-    this.setData({ items: this.withPins(this.data.items) });
+    const allItems = this.withPins(this.data.allItems);
+    this.setData({ allItems, items: this.applyKeyword(allItems) });
   },
   onDelete(event) {
     const id = event.currentTarget.dataset.id;

@@ -74,9 +74,22 @@ async function wechatAccessToken() {
   return cachedToken.value;
 }
 
+function devPhoneFromCode(phoneCode) {
+  if (!config.wechatSkipAllowed()) return null;
+  const raw = String(phoneCode || '').trim();
+  if (!raw.startsWith('dev:')) return null;
+  const phone = mainlandPhone(raw.slice(4));
+  if (!/^1\d{10}$/.test(phone)) {
+    throw httpError(400, 'VALIDATION_ERROR', '测试手机号无效');
+  }
+  return phone;
+}
+
 async function phoneFromWechatCode(phoneCode) {
   const raw = String(phoneCode || '').trim();
   if (!raw) return '';
+  const dev = devPhoneFromCode(raw);
+  if (dev) return dev;
   const token = await wechatAccessToken();
   const response = await fetch(
     'https://api.weixin.qq.com/wxa/business/getuserphonenumber?access_token=' + encodeURIComponent(token),

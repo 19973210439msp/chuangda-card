@@ -1,18 +1,32 @@
-<nav-bar title="登录"></nav-bar>
+<nav-bar title="电子名片"></nav-bar>
 <scroll-view class="sub-scroll" scroll-y style="height: {{scrollHeight}}px">
-<view class="sub-body">
-  <image class="seal" src="/assets/brand-logo.png" mode="aspectFit"></image>
-  <text class="h1">创大产控 · 电子名片</text>
-  <text class="desc">高新技术集团统一名片。正式环境使用微信授权进入。</text>
-  <view class="panel">
-    <text class="section">进入工作台</text>
-    <text class="desc">微信授权会读取绑定手机号，用来领取管理员导入的名片。测试模式会直接进入，之后在「我的」里绑定手机号。</text>
-    <view class="error" wx:if="{{error}}">{{error}}</view>
-    <button class="primary" wx:if="{{!wechatSkip}}" open-type="getPhoneNumber" bindgetphonenumber="onWechatPhone" loading="{{loading}}">微信授权登录</button>
-    <button class="primary" wx:else loading="{{loading}}" bindtap="onWechat">微信授权登录</button>
-    <button class="ghost" wx:if="{{wechatSkip}}" loading="{{loading}}" bindtap="onSkip">使用测试身份进入</button>
+<view class="login-page" style="min-height: {{scrollHeight}}px;">
+  <view class="login-brand">
+    <view class="seal">
+      <image class="seal-img" src="/assets/brand-logo.png" mode="aspectFill"></image>
+    </view>
+    <view class="brand-copy">
+      <text class="h1">创大产控 · 电子名片</text>
+      <text class="brand-desc">为企业员工提供统一的电子名片服务</text>
+    </view>
   </view>
-  <view class="band">
+
+  <view class="login-main">
+    <text class="login-title">欢迎使用</text>
+    <text class="login-desc">授权微信手机号，用于匹配您的员工名片</text>
+    <view class="error" wx:if="{{error}}">{{error}}</view>
+    <button class="login-primary" open-type="getPhoneNumber" bindgetphonenumber="onWechatPhone" loading="{{loading}}" disabled="{{loading}}">微信授权手机号登录</button>
+    <text class="login-hint">首次登录将自动匹配或创建名片</text>
+  </view>
+
+  <view class="dev-entry" wx:if="{{wechatSkip}}">
+    <view class="dev-rule"></view>
+    <text class="dev-label">测试入口仅在开发环境显示</text>
+    <view class="dev-rule"></view>
+    <button class="dev-link" loading="{{loading}}" disabled="{{loading}}" bindtap="onSkip">使用测试身份进入</button>
+  </view>
+
+  <view class="login-footer">
     <view class="bars">
       <view class="b b1"></view>
       <view class="b b2"></view>

@@ -15,11 +15,13 @@ function blankPerson(partial) {
     title: partial.title || '',
     department: partial.department || '',
     phone: partial.phone || '',
+    authPhone: partial.authPhone || '',
+    cardTemplate: partial.cardTemplate || 'classic',
+    activeCardId: partial.activeCardId || '',
+    cards: Array.isArray(partial.cards) ? partial.cards : [],
     wechat: partial.wechat || '',
     email: partial.email || '',
     address: partial.address || '',
-    avatar: partial.avatar || '',
-    portrait: partial.portrait || '',
     attachments: Array.isArray(partial.attachments) ? partial.attachments : [],
     status: partial.status || 'active',
     createdAt: partial.createdAt || now,
@@ -102,27 +104,54 @@ function seedData() {
 }
 
 function toCard(person) {
+  const { projectActive, templateLabel } = require('./cards');
+  const view = projectActive(person);
   return {
-    id: person.id,
-    employeeNo: person.employeeNo || '',
-    name: person.name || '',
-    company: person.company || '',
-    title: person.title || '',
-    department: person.department || '',
-    phone: person.phone || '',
-    wechat: person.wechat || '',
-    email: person.email || '',
-    address: person.address || '',
-    avatar: person.avatar || '',
-    portrait: person.portrait || '',
-    attachments: person.attachments || [],
-    kind: person.kind,
-    status: person.status,
+    id: view.id,
+    employeeNo: view.employeeNo || '',
+    name: view.name || '',
+    company: view.company || '',
+    title: view.title || '',
+    department: view.department || '',
+    phone: view.phone || '',
+    wechat: view.wechat || '',
+    email: view.email || '',
+    address: view.address || '',
+    attachments: view.attachments || [],
+    cardTemplate: view.cardTemplate || 'classic',
+    companyId: view.companyId || '',
+    templateLabel: view.templateName || templateLabel(view.cardTemplate),
+    activeCardId: view.activeCardId || '',
+    kind: view.kind,
+    status: view.status,
   };
 }
 
 function toSelf(person) {
-  return toCard(person);
+  const { projectActive, presentCard } = require('./cards');
+  const view = projectActive(person);
+  return {
+    ...toCard(view),
+    authPhone: view.authPhone || '',
+    cards: (view.cards || []).map(presentCard),
+  };
 }
 
-module.exports = { nowIso, blankPerson, seedData, toCard, toSelf };
+function demoSeedAllowed() {
+  return process.env.NODE_ENV !== 'production';
+}
+
+function initialStoreData() {
+  const data = seedData();
+  if (demoSeedAllowed()) return data;
+  return {
+    ...data,
+    people: [],
+    holders: [],
+    views: [],
+    sessions: [],
+    codes: [],
+  };
+}
+
+module.exports = { nowIso, blankPerson, seedData, initialStoreData, demoSeedAllowed, toCard, toSelf };

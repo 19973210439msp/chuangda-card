@@ -21,4 +21,15 @@ function averageDuration(views) {
   return Math.round(total / views.length);
 }
 
-module.exports = { interestIndex, averageDuration };
+/** 用按名片聚合后的统计算兴趣指数，规则与 interestIndex(views) 一致。 */
+function interestIndexFromStats({ views, avgDurationSec, visitors, exchanges }) {
+  const count = Number(views) || 0;
+  if (!count) return 0;
+  const viewScore = Math.min(40, count * 8);
+  const durationScore = Math.min(30, Math.round((Number(avgDurationSec) || 0) / 6));
+  const exchangeScore = (Number(exchanges) || 0) > 0 ? 20 : 0;
+  const uniqueScore = Math.min(10, (Number(visitors) || 0) * 2);
+  return Math.min(100, viewScore + durationScore + exchangeScore + uniqueScore);
+}
+
+module.exports = { interestIndex, averageDuration, interestIndexFromStats };

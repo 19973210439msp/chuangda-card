@@ -1,9 +1,10 @@
 const { request } = require('../../utils/request');
 const { pageScrollHeight } = require('../../utils/util');
 const accounts = require('../../utils/accounts');
+const { phoneAuthError, phoneCodeFromEvent } = require('../../utils/phone-auth');
 
 Page({
-  data: { wechatSkip: false, loading: false, error: '', scrollHeight: 600 },
+  data: { wechatSkip: true, loading: false, error: '', scrollHeight: 600 },
   onLoad() {
     this.setData({ scrollHeight: pageScrollHeight() });
   },
@@ -17,34 +18,69 @@ Page({
       this.finishLogin();
       return;
     }
+    this.tryResume();
     if (this.checking) return;
     this.checking = true;
     request({ url: '/api/auth/options', redirectOnAuth: false })
       .then((data) => {
-        const wechatSkip = !!data.wechatSkip;
-        this.setData({ wechatSkip });
-        if (wechatSkip) this.onSkip();
-        else this.checking = false;
+        // 即使测试可跳过，也不再自动进入；优先走微信授权手机号，避免落到短信绑号页
+        this.setData({ wechatSkip: !!data.wechatSkip });
+        this.checking = false;
       })
       .catch(() => {
         this.checking = false;
       });
   },
+  tryResume() {
+    if (this.resuming) return;
+    this.resuming = true;
+    wx.login({
+      success: (res) => {
+        if (!res.code) {
+          this.resuming = false;
+          return;
+        }
+        request({
+          url: '/api/auth/wechat',
+          method: 'POST',
+          data: { code: res.code, resume: true },
+          redirectOnAuth: false,
+        }).then((data) => {
+          if (!data || !data.returning || !data.token) {
+            this.resuming = false;
+            return;
+          }
+          wx.setStorageSync('token', data.token);
+          if (data.employee) accounts.remember(data.employee);
+          this.finishLogin();
+        }).catch(() => {
+          this.resuming = false;
+        });
+      },
+      fail: () => {
+        this.resuming = false;
+      },
+    });
+  },
   onWechat() {
     this.loginWith((done) => wx.login({ success: (res) => done(res.code), fail: () => done('') }));
   },
   onWechatPhone(event) {
-    const detail = event.detail || {};
-    const phoneCode = detail.code || '';
+    const phoneCode = phoneCodeFromEvent(event);
+    if (!phoneCode) {
+      this.setData({
+        error: phoneAuthError(event.detail),
+        loading: false,
+      });
+      return;
+    }
     this.loginWith((done) => wx.login({
       success: (res) => done(res.code, phoneCode),
-      fail: () => done(''),
+      fail: () => done('', phoneCode),
     }));
   },
   onSkip() {
-    const adding = wx.getStorageSync('addingAccount');
-    if (adding) wx.removeStorageSync('addingAccount');
-    let dev = adding ? '' : wx.getStorageSync('devOpenId');
+    let dev = wx.getStorageSync('devOpenId');
     if (!dev) {
       dev = Math.random().toString(36).slice(2, 10);
       wx.setStorageSync('devOpenId', dev);
@@ -54,6 +90,11 @@ Page({
   loginWith(getCode) {
     this.setData({ loading: true, error: '' });
     getCode((code, phoneCode) => {
+      if (!code) {
+        this.checking = false;
+        this.setData({ error: '微信登录失败，请重试', loading: false });
+        return;
+      }
       const data = { code };
       if (phoneCode) data.phoneCode = phoneCode;
       request({
@@ -64,7 +105,14 @@ Page({
       }).then((data) => {
         wx.setStorageSync('token', data.token);
         if (data.employee) accounts.remember(data.employee);
-        if (data.claimed) wx.showToast({ title: '已领取导入名片', icon: 'success' });
+        if (data.claimed || data.matchedImport) {
+          wx.showToast({
+            title: data.employee && data.employee.name
+              ? '已领取：' + data.employee.name
+              : '已领取导入名片',
+            icon: 'success',
+          });
+        }
         this.finishLogin();
       }).catch((err) => {
         this.checking = false;
@@ -85,7 +133,11 @@ Page({
       redirectOnAuth: false,
     }).catch(() => null).then(() => {
       wx.removeStorageSync('pendingCardId');
-      wx.redirectTo({ url: '/pages/client/card?cardId=' + pending });
+      const share = wx.getStorageSync('pendingShareCard');
+      wx.removeStorageSync('pendingShareCard');
+      let url = '/pages/client/card?cardId=' + pending + '&collected=1';
+      if (share) url += '&shareCard=' + encodeURIComponent(share);
+      wx.redirectTo({ url });
     });
   },
 });

@@ -1,8 +1,12 @@
+const crypto = require('crypto');
 const { httpError } = require('./errors');
 const { assertPhoneAvailable, findOccupyingPhone } = require('./identity');
 const { claimImportedCard } = require('./claim');
-const { nowIso } = require('./person');
+const { subsidiaryId } = require('./certify');
+const { blankPerson, nowIso } = require('./person');
 const { consumeCode } = require('./verify');
+const { phoneFromWechatCode } = require('./wechat');
+const { writeActive, assignCardCompany, ensureCards } = require('./cards');
 const {
   text,
   normalizePhone,
@@ -12,14 +16,8 @@ const {
   normalizeAttachments,
 } = require('./validate');
 
-function keepLatestWechatQr(list) {
-  const rest = [];
-  let latest = null;
-  for (const item of list) {
-    if (item && item.name === '微信二维码') latest = item;
-    else rest.push(item);
-  }
-  return latest ? rest.concat(latest) : rest;
+function dropWechatQr(list) {
+  return (list || []).filter((item) => !item || item.name !== '微信二维码');
 }
 
 async function saveSelfCard(store, person, body) {
@@ -29,40 +27,81 @@ async function saveSelfCard(store, person, body) {
   if (body.title !== undefined) next.title = text(body.title, 40);
   if (body.wechat !== undefined) next.wechat = text(body.wechat, 40);
   if (body.address !== undefined) next.address = text(body.address, 120);
-  if (body.avatar !== undefined) next.avatar = text(body.avatar, 500);
-  if (body.portrait !== undefined) next.portrait = text(body.portrait, 500);
-  if (body.attachments !== undefined) next.attachments = keepLatestWechatQr(normalizeAttachments(body.attachments));
+  if (body.attachments !== undefined) next.attachments = dropWechatQr(normalizeAttachments(body.attachments));
+  delete next.avatar;
+  delete next.portrait;
 
   if (body.phone !== undefined) {
     const phone = normalizePhone(body.phone);
-    if (phone !== person.phone) {
-      assertMobile(phone);
-      await consumeCode(store, { userId: person.id, channel: 'sms', target: phone, code: body.phoneCode });
-      const occupying = await findOccupyingPhone(store, phone);
-      if (occupying && occupying.id !== person.id && !occupying.openid) {
-        throw httpError(409, 'PHONE_EXISTS', '该手机号已有导入名片，请到「我的」绑定手机号领取');
-      }
-      await assertPhoneAvailable(store, phone, person.id);
-      next.phone = phone;
-    }
+    if (phone) assertMobile(phone);
+    next.phone = phone;
   }
   if (body.email !== undefined) {
     const email = normalizeEmail(body.email);
     if (email !== person.email) {
-      assertEmail(email);
-      await consumeCode(store, { userId: person.id, channel: 'email', target: email, code: body.emailCode });
+      if (email) assertEmail(email);
       next.email = email;
     }
   }
   next.updatedAt = nowIso();
-  return store.updatePerson(person.id, next);
+  let synced = writeActive(next, {
+    name: next.name,
+    company: next.company,
+    title: next.title,
+    phone: next.phone,
+    wechat: next.wechat,
+    email: next.email,
+    address: next.address,
+    attachments: next.attachments,
+  });
+  if (body.companyId !== undefined) {
+    const wanted = String(body.companyId || '');
+    const ready = ensureCards(person);
+    const active = ready.cards.find((card) => card.id === ready.activeCardId) || ready.cards[0];
+    const owned = subsidiaryId(active);
+    const approvedIds = (await store.listApplications())
+      .filter((item) => item.personId === person.id && item.cardId === active.id && item.status === 'approved')
+      .map((item) => item.companyId);
+    const allowed = new Set(approvedIds.filter(Boolean));
+    if (owned) allowed.add(owned);
+    if (wanted && wanted !== 'default' && !allowed.has(wanted)) {
+      throw httpError(403, 'FORBIDDEN', '只能选择总公司或已认证的子公司');
+    }
+    const companyId = !wanted || wanted === 'default' ? '' : wanted;
+    const assigned = assignCardCompany(synced, synced.activeCardId, companyId, synced.company);
+    if (assigned) synced = assigned;
+  }
+  synced.updatedAt = next.updatedAt;
+  return store.updatePerson(person.id, synced);
+}
+
+async function resolveChangePhone(body) {
+  const wechatCode = text(body && body.phoneCode, 256);
+  const smsCode = text(body && body.code, 16);
+  const typed = normalizePhone(body && body.phone);
+
+  // 优先微信手机号授权；短信仅保留给自动化测试兼容
+  if (wechatCode && !smsCode) {
+    return phoneFromWechatCode(wechatCode);
+  }
+  if (typed && smsCode) {
+    assertMobile(typed);
+    return typed;
+  }
+  throw httpError(400, 'VALIDATION_ERROR', '请通过微信授权手机号');
 }
 
 async function changePhone(store, person, body, sessionToken) {
-  const phone = normalizePhone(body && body.phone);
-  assertMobile(phone);
-  if (phone === person.phone) throw httpError(400, 'VALIDATION_ERROR', '与当前手机号相同');
-  await consumeCode(store, { userId: person.id, channel: 'sms', target: phone, code: body && body.code });
+  const phone = await resolveChangePhone(body || {});
+  const currentAccount = person.authPhone || person.phone;
+  if (phone === currentAccount) throw httpError(400, 'VALIDATION_ERROR', '与当前手机号相同');
+
+  const smsCode = text(body && body.code, 16);
+  if (smsCode) {
+    await consumeCode(store, { userId: person.id, channel: 'sms', target: phone, code: smsCode });
+    return openPhoneAccount(store, person, phone, sessionToken);
+  }
+
   const claimed = await claimImportedCard(store, {
     phone,
     openid: person.openid,
@@ -71,9 +110,136 @@ async function changePhone(store, person, body, sessionToken) {
   });
   if (claimed) return claimed;
   await assertPhoneAvailable(store, phone, person.id);
-  const next = { ...person, phone, updatedAt: nowIso() };
+  const next = writeActive({ ...person, phone, authPhone: phone, updatedAt: nowIso() }, {
+    name: person.name,
+    company: person.company,
+    title: person.title,
+    phone,
+    wechat: person.wechat,
+    email: person.email,
+    address: person.address,
+    attachments: person.attachments,
+  });
+  next.updatedAt = nowIso();
   const saved = await store.updatePerson(person.id, next);
   return { employee: saved, claimed: false };
+}
+
+async function rememberOpenAccount(store, openid, personId) {
+  if (!openid || !personId) return null;
+  return store.saveAccountLink({ openid, personId, updatedAt: nowIso() });
+}
+
+async function listLinkedAccounts(store, person) {
+  const openid = person.openid || '';
+  const links = openid ? await store.listAccountLinks(openid) : [];
+  const ids = new Set(links.map((item) => item.personId));
+  ids.add(person.id);
+  const items = [];
+  for (const id of ids) {
+    const row = await store.getPerson(id);
+    if (!row || row.kind !== 'employee' || row.status !== 'active') continue;
+    items.push({
+      id: row.id,
+      name: row.name || '',
+      phone: row.authPhone || row.phone || '',
+      current: row.id === person.id,
+    });
+  }
+  return items;
+}
+
+async function switchLinkedAccount(store, person, personId, sessionToken) {
+  const openid = person.openid || '';
+  if (!openid) throw httpError(403, 'FORBIDDEN', '当前微信还没有绑定账号');
+  const links = await store.listAccountLinks(openid);
+  const allowed = new Set(links.map((item) => item.personId));
+  allowed.add(person.id);
+  if (!allowed.has(personId)) throw httpError(403, 'FORBIDDEN', '只能切换曾经验证过的账号');
+  if (personId === person.id) return { employee: person };
+  const target = await store.getPerson(personId);
+  if (!target || target.kind !== 'employee' || target.status !== 'active') {
+    throw httpError(404, 'NOT_FOUND', '账号不存在');
+  }
+  await store.updatePerson(person.id, { ...person, openid: '', updatedAt: nowIso() });
+  const saved = await store.updatePerson(target.id, { ...target, openid, updatedAt: nowIso() });
+  if (sessionToken) await store.reassignSessionUser(sessionToken, target.id);
+  await rememberOpenAccount(store, openid, person.id);
+  await rememberOpenAccount(store, openid, saved.id);
+  return { employee: saved };
+}
+
+async function openPhoneAccount(store, person, phone, sessionToken) {
+  const openid = person.openid || '';
+  await rememberOpenAccount(store, openid, person.id);
+  const found = await findOccupyingPhone(store, phone);
+  if (found && found.id !== person.id && found.openid && found.openid !== openid) {
+    if (found.status !== 'active') {
+      throw httpError(409, 'PHONE_EXISTS', '该手机号已绑定另一名已注册员工');
+    }
+    await store.updatePerson(person.id, {
+      ...person,
+      openid: '',
+      updatedAt: nowIso(),
+    });
+    const saved = await store.updatePerson(found.id, {
+      ...found,
+      openid,
+      authPhone: phone,
+      updatedAt: nowIso(),
+    });
+    if (sessionToken) await store.reassignSessionUser(sessionToken, saved.id);
+    await rememberOpenAccount(store, openid, saved.id);
+    return { employee: saved, claimed: true, loggedIn: true };
+  }
+  const claimed = await claimImportedCard(store, {
+    phone,
+    openid: person.openid,
+    shell: person,
+    sessionToken,
+  });
+  if (claimed) {
+    const saved = await store.updatePerson(claimed.employee.id, {
+      ...claimed.employee,
+      authPhone: phone,
+      updatedAt: nowIso(),
+    });
+    await rememberOpenAccount(store, openid, saved.id);
+    return { employee: saved, claimed: true };
+  }
+  await assertPhoneAvailable(store, phone, person.id);
+  const card = {
+    id: 'card-default',
+    template: 'classic',
+    isDefault: true,
+    name: '',
+    company: '',
+    title: '',
+    phone,
+    wechat: '',
+    email: '',
+    address: '',
+    companyId: '',
+    attachments: [],
+  };
+  const fresh = blankPerson({
+    id: 'emp-' + crypto.randomBytes(4).toString('hex'),
+    kind: 'employee',
+    openid: person.openid || '',
+    phone,
+    authPhone: phone,
+    cards: [card],
+    activeCardId: card.id,
+  });
+  await store.insertPerson(fresh);
+  if (sessionToken) await store.reassignSessionUser(sessionToken, fresh.id);
+  await store.updatePerson(person.id, {
+    ...person,
+    openid: '',
+    updatedAt: nowIso(),
+  });
+  await rememberOpenAccount(store, openid, fresh.id);
+  return { employee: fresh, claimed: false };
 }
 
 async function changeEmail(store, person, body) {
@@ -92,4 +258,12 @@ async function closeAccount(store, person) {
   return next;
 }
 
-module.exports = { saveSelfCard, changePhone, changeEmail, closeAccount };
+module.exports = {
+  saveSelfCard,
+  changePhone,
+  changeEmail,
+  closeAccount,
+  rememberOpenAccount,
+  listLinkedAccounts,
+  switchLinkedAccount,
+};
