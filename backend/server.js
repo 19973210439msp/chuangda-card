@@ -34,6 +34,7 @@ const {
   requireEmployee,
 } = require('./lib/access');
 const { clientIp, assertLoginAllowed, recordLoginFailure, recordLoginSuccess } = require('./lib/loginLock');
+const { applyCors } = require('./lib/cors');
 
 let store;
 try {
@@ -55,9 +56,10 @@ const uploadRoot = config.uploadDir();
 
 app.disable('x-powered-by');
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  const decision = applyCors(req, res);
+  if (!decision.allow) {
+    return res.status(403).json({ error: { code: 'ORIGIN_FORBIDDEN', message: '只允许通过指定域名访问' } });
+  }
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
