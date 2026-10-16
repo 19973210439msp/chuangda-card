@@ -1,5 +1,6 @@
 const app = document.querySelector('#app');
 const views = [
+  ['overview', '工作台'],
   ['companies', '子公司'],
   ['cert', '员工认证'],
   ['cards', '名片管理'],
@@ -9,8 +10,19 @@ const views = [
   ['visits', '浏览明细'],
 ];
 
+const viewDescriptions = {
+  overview: '查看待办事项与名片使用情况',
+  companies: '管理集团与子公司资料',
+  cert: '处理员工的企业认证申请',
+  cards: '维护员工资料与对外名片',
+  templates: '管理名片样式与使用范围',
+  import: '批量创建或更新员工名片',
+  brand: '设置公司对外展示的信息',
+  visits: '查看名片浏览记录',
+};
+
 const state = {
-  view: 'cert',
+  view: 'overview',
   company: null,
   employees: [],
   summary: [],
@@ -55,23 +67,26 @@ function navViews() {
 }
 
 function shell(title, body) {
-  const nav = navViews().map(([id, label]) => (
-    `<a href="#/${id}" ${state.view === id ? 'aria-current="page"' : ''}>${label}</a>`
-  )).join('');
+  const nav = navViews().map(([id, label]) => {
+    const icon = {
+      overview: '▦', companies: '▤', cert: '✓', cards: '▣',
+      templates: '◫', import: '⇧', brand: '◈', visits: '◷',
+    }[id];
+    return `<a href="#/${id}" ${state.view === id ? 'aria-current="page"' : ''}><span class="nav-icon" aria-hidden="true">${icon}</span><span>${label}</span></a>`;
+  }).join('');
+  const role = state.admin && state.admin.scope === 'company' ? '子公司管理员' : '总部管理员';
   return `
     <div class="shell">
       <aside class="rail">
-        <div class="seal" aria-hidden="true">创</div>
-        <p class="brand-name">创大产控</p>
-        <p class="brand-sub">电子名片管理</p>
+        <div class="rail-brand"><img src="/brand-logo.png" alt="" width="40" height="40"><div><p class="brand-name">创大产控</p><p class="brand-sub">名片管理平台</p></div></div>
+        <p class="nav-caption">工作区</p>
         <nav aria-label="后台">${nav}</nav>
+        <div class="rail-foot"><span class="rail-foot-dot" aria-hidden="true"></span> 管理后台</div>
       </aside>
       <main id="main">
         <div class="section-head">
-          <div>
-            <h2>${title}</h2>
-          </div>
-          <button class="btn secondary small" type="button" data-action="logout">退出</button>
+          <div><p class="page-kicker">创大产控 / ${title}</p><h1>${title}</h1><p class="page-description">${viewDescriptions[state.view] || ''}</p></div>
+          <div class="account-tools"><span class="role-chip">${role}</span><button class="btn secondary small" type="button" data-action="logout">退出登录</button></div>
         </div>
         ${state.notice ? `<p class="banner ok" role="status">${esc(state.notice)}</p>` : ''}
         ${state.error ? `<p class="banner" role="alert">${esc(state.error)}</p>` : ''}
@@ -79,6 +94,29 @@ function shell(title, body) {
       </main>
     </div>
     ${templateGallery()}`;
+}
+
+function dashboardHtml() {
+  const employees = state.employees.filter((item) => item.status !== 'closed');
+  const cardCount = employees.reduce((count, item) => count + (item.cards || []).length, 0);
+  const pending = (state.certifications || []).filter((item) => item.status === 'pending');
+  const companyCount = (state.companies || []).length;
+  const hq = !state.admin || state.admin.scope !== 'company';
+  const metrics = [
+    ['员工名片', cardCount, '当前在用的名片总数'],
+    ['在职员工', employees.filter((item) => item.status === 'active').length, '可正常使用的员工账号'],
+    ['待审核', pending.length, pending.length ? '有申请需要处理' : '当前没有待处理申请'],
+    ...(hq ? [['集团公司', companyCount, '已建立的公司档案']] : []),
+  ];
+  return shell('工作台', `
+    <div class="overview-heading"><div><h2>业务概览</h2><p class="muted">名片和员工认证的实时数据</p></div><a class="btn" href="#/cards">管理名片</a></div>
+    <div class="stat-row">${metrics.map(([label, count, detail]) => `<div class="stat"><span>${label}</span><b>${count}</b><small>${detail}</small></div>`).join('')}</div>
+    <div class="overview-grid">
+      <section class="panel action-panel"><div class="panel-heading"><div><p class="panel-kicker">待办事项</p><h2>员工认证</h2></div><a class="text-link" href="#/cert">查看全部 <span aria-hidden="true">→</span></a></div>
+        ${pending.length ? `<p class="action-count">${pending.length} <span>项申请等待审核</span></p><ul class="pending-list">${pending.slice(0, 4).map((item) => `<li><span class="avatar" aria-hidden="true">${esc((item.name || '员').slice(0, 1))}</span><span><strong>${esc(item.name || '未命名员工')}</strong><small>${esc(item.companyName || item.title || '企业认证申请')}</small></span><span class="tag">待审核</span></li>`).join('')}</ul>` : '<div class="empty-state"><span aria-hidden="true">✓</span><strong>暂无待审核申请</strong><p>新的员工认证申请会出现在这里。</p></div>'}
+      </section>
+      <section class="panel quick-panel"><p class="panel-kicker">快捷入口</p><h2>常用操作</h2><div class="quick-links"><a href="#/cards"><span class="quick-icon" aria-hidden="true">＋</span><span><strong>名片管理</strong><small>查看、编辑和新建名片</small></span><span aria-hidden="true">→</span></a><a href="#/import"><span class="quick-icon" aria-hidden="true">⇧</span><span><strong>批量导入</strong><small>导入表格或文件</small></span><span aria-hidden="true">→</span></a><a href="#/templates"><span class="quick-icon" aria-hidden="true">◫</span><span><strong>模板管理</strong><small>查看并分配名片模板</small></span><span aria-hidden="true">→</span></a></div></section>
+    </div>`);
 }
 
 function renderLogin(message) {
@@ -185,33 +223,32 @@ function templateGallery() {
 }
 
 function cardsHtml() {
-  const rows = state.employees.filter((item) => item.status !== 'closed').map((item) => {
+  const rows = state.employees.filter((item) => item.status !== 'closed').flatMap((item) => {
     const cards = item.cards || [];
-    const primary = cards.find((card) => card.isDefault) || cards[0] || {};
-    const templates = cards.map((card) => card.templateLabel || templateName(card.template)).filter(Boolean);
-    const companies = [...new Set(cards.map((card) => card.company).filter(Boolean))];
-    const templateText = templates.join('、') || '创大产控模板';
-    const companyText = companies.join('、');
-    const nameText = primary.name || item.name || '未命名';
-    return `
+    return (cards.length ? cards : [{}]).map((card, index) => {
+      const nameText = card.name || item.name || '未命名';
+      const companyText = card.company || item.company || '';
+      const currentTemplate = card.templateLabel || templateName(card.template);
+      return `
     <tr>
-      <td title="${esc(nameText)}"><span class="cell-clip">${esc(nameText)}${cards.length > 1 ? `<span class="muted"> ${cards.length}张</span>` : ''}</span></td>
-      <td title="${esc(companyText)}"><span class="cell-clip">${esc(companyText)}</span></td>
-      <td title="${esc(primary.title || '')}"><span class="cell-clip">${esc(primary.title || '')}</span></td>
-      <td title="${esc(primary.phone || item.phone || '')}"><span class="cell-clip">${esc(primary.phone || item.phone || '')}</span></td>
-      <td title="${esc(primary.email || item.email || '')}"><span class="cell-clip">${esc(primary.email || item.email || '')}</span></td>
-      <td title="${esc(templateText)}"><span class="cell-clip">${esc(templateText)}</span></td>
-      <td><span class="tag ${esc(item.status)}">${statusLabel(item.status)}</span></td>
-      <td class="ops">
+      <td data-label="姓名" title="${esc(nameText)}"><span class="cell-clip">${esc(nameText)}${card.isDefault ? '<span class="tag default-card">默认</span>' : ''}</span></td>
+      <td data-label="公司" title="${esc(companyText)}"><span class="cell-clip">${esc(companyText)}</span></td>
+      <td data-label="职位" title="${esc(card.title || '')}"><span class="cell-clip">${esc(card.title || '')}</span></td>
+      <td data-label="手机" title="${esc(card.phone || item.phone || '')}"><span class="cell-clip">${esc(card.phone || item.phone || '')}</span></td>
+      <td data-label="邮箱" title="${esc(card.email || item.email || '')}"><span class="cell-clip">${esc(card.email || item.email || '')}</span></td>
+      <td data-label="所用模板" title="${esc(currentTemplate)}"><span class="cell-clip">${esc(currentTemplate)}</span></td>
+      <td data-label="状态"><span class="tag ${esc(item.status)}">${statusLabel(item.status)}</span></td>
+      <td class="ops" data-label="操作">
         <div class="inline-actions">
-        <button class="btn secondary small" type="button" data-action="edit" data-id="${esc(item.id)}">编辑</button>
-        ${item.status === 'closed' || item.status === 'disabled'
+        <button class="btn secondary small" type="button" data-action="${card.id ? 'edit-card' : 'edit'}" data-id="${esc(item.id)}" ${card.id ? `data-card="${esc(card.id)}"` : ''}>编辑</button>
+        ${index === 0 ? (item.status === 'closed' || item.status === 'disabled'
           ? `<button class="btn small" type="button" data-action="restore" data-id="${esc(item.id)}">恢复账号</button>`
-          : `<button class="btn secondary small" type="button" data-action="disable" data-id="${esc(item.id)}">停用账号</button>`}
-        <button class="btn danger small" type="button" data-action="remove" data-id="${esc(item.id)}">删除员工</button>
+          : `<button class="btn secondary small" type="button" data-action="disable" data-id="${esc(item.id)}">停用账号</button>`) : ''}
+        ${index === 0 ? `<button class="btn danger small" type="button" data-action="remove" data-id="${esc(item.id)}">删除员工</button>` : ''}
         </div>
       </td>
     </tr>`;
+    });
   }).join('');
   const closed = state.employees.filter((item) => item.status === 'closed');
   const closedRows = closed.map((item) => `
@@ -236,7 +273,7 @@ function cardsHtml() {
       <button class="btn" type="button" data-action="create">新建名片</button>
     </div>
     <div class="panel table-wrap">
-      <p class="lede">共 ${state.employees.filter((item) => item.status !== 'closed').length} 个员工、${state.employees.filter((item) => item.status !== 'closed').reduce((count, item) => count + (item.cards || []).length, 0)} 张名片。同一员工的多张名片合并成一行，点编辑查看每张名片。</p>
+      <p class="lede">共 ${state.employees.filter((item) => item.status !== 'closed').length} 个员工、${state.employees.filter((item) => item.status !== 'closed').reduce((count, item) => count + (item.cards || []).length, 0)} 张名片。每张名片单独显示，可直接编辑。</p>
       <table class="cards-table">
         <colgroup>
           <col class="col-name"><col class="col-company"><col class="col-title"><col class="col-phone"><col class="col-email"><col class="col-template"><col class="col-status"><col class="col-ops">
@@ -540,7 +577,8 @@ function visitsHtml() {
 }
 
 function paint() {
-  if (state.view === 'companies') app.innerHTML = companiesHtml();
+  if (state.view === 'overview') app.innerHTML = dashboardHtml();
+  else if (state.view === 'companies') app.innerHTML = companiesHtml();
   else if (state.view === 'templates') app.innerHTML = templatesHtml();
   else if (state.view === 'cert') app.innerHTML = certHtml();
   else if (state.view === 'cards') app.innerHTML = cardsHtml();
@@ -564,7 +602,16 @@ async function loadView(view) {
   if (view === 'cards' || view === 'import' || view === 'templates') {
     state.templates = (await api('/api/templates')).items || [];
   }
-  if (view === 'companies') {
+  if (view === 'overview') {
+    const [employees, certifications, companies] = await Promise.all([
+      api('/api/employees'),
+      api('/api/certifications'),
+      state.admin.scope === 'company' ? Promise.resolve({ items: [] }) : api('/api/companies'),
+    ]);
+    state.employees = employees.items || [];
+    state.certifications = certifications.items || [];
+    state.companies = companies.items || [];
+  } else if (view === 'companies') {
     state.companies = (await api('/api/companies')).items || [];
   } else if (view === 'cert') {
     state.certifications = (await api('/api/certifications')).items || [];
@@ -606,10 +653,10 @@ async function route() {
     renderLogin();
     return;
   }
-  const view = (location.hash || '#/cert').replace('#/', '') || 'cert';
+  const view = (location.hash || '#/overview').replace('#/', '') || 'overview';
   const known = views.some(([id]) => id === view);
   try {
-    await loadView(known ? view : 'cert');
+    await loadView(known ? view : 'overview');
   } catch (err) {
     if (err.status === 401) renderLogin(err.message);
     else {
@@ -718,7 +765,7 @@ document.addEventListener('submit', async (event) => {
       const result = await api('/api/login', { method: 'POST', body: data });
       setToken(result.token);
       state.admin = result;
-      location.hash = '#/cert';
+      location.hash = '#/overview';
       await route();
       return;
     }

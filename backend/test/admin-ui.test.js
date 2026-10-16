@@ -31,5 +31,5 @@ test('card management renders every employee card as its own row', () => {
   assert.match(html, /data-action="edit-card" data-id="person-1" data-card="card-1"/);
   assert.match(html, /data-action="edit-card" data-id="person-1" data-card="card-2"/);
   const dashboard = vm.runInContext('dashboardHtml()', context);
-  assert.match(dashboard, /<b>2<\/b><span>员工名片<\/span>/);
+  assert.match(dashboard, /<span>员工名片<\/span><b>2<\/b>/);
 });
