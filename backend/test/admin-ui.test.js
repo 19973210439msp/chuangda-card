@@ -8,7 +8,7 @@ test('card management renders every employee card as its own row', () => {
   const source = fs.readFileSync(path.join(__dirname, '../../admin-web/js/app.js'), 'utf8');
   const page = { innerHTML: '', querySelector: () => null };
   const context = vm.createContext({
-    document: { querySelector: () => page, addEventListener: () => {} },
+    document: { querySelector: (selector) => selector === '#app' ? page : null, addEventListener: () => {} },
     window: { addEventListener: () => {} },
     location: { hash: '#/cards' },
     token: () => '',
@@ -32,4 +32,35 @@ test('card management renders every employee card as its own row', () => {
   assert.match(html, /data-action="edit-card" data-id="person-1" data-card="card-2"/);
   const dashboard = vm.runInContext('dashboardHtml()', context);
   assert.match(dashboard, /<span>员工名片<\/span><b>2<\/b>/);
+});
+
+test('success notice expires and clears when switching pages', async () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../admin-web/js/app.js'), 'utf8');
+  const page = { innerHTML: '', querySelector: () => null };
+  let timer;
+  let removed = 0;
+  const context = vm.createContext({
+    document: {
+      querySelector: (selector) => selector === '#app' ? page : selector === '.banner.ok' ? { remove: () => { removed += 1; } } : null,
+      addEventListener: () => {},
+    },
+    window: { addEventListener: () => {} },
+    location: { hash: '#/cards' },
+    token: () => '',
+    api: async () => ({ items: [] }),
+    setTimeout: (callback, delay) => { assert.equal(delay, 5000); timer = callback; return 1; },
+    clearTimeout: () => { timer = null; },
+  });
+  vm.runInContext(source, context);
+  vm.runInContext("state.admin = { scope: 'hq' }; state.view = 'cards'; showNotice('已删除')", context);
+  await vm.runInContext("loadView('cards')", context);
+  assert.equal(vm.runInContext('state.notice', context), '已删除');
+  timer();
+  assert.equal(vm.runInContext('state.notice', context), '');
+  assert.ok(removed > 0);
+
+  vm.runInContext("state.view = 'overview'; showNotice('已删除')", context);
+  await vm.runInContext('route()', context);
+  assert.equal(vm.runInContext('state.notice', context), '');
+  assert.equal(timer, null);
 });

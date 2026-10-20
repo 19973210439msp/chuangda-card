@@ -29,12 +29,13 @@ a { color: var(--accent); }
 .skip {
   position: absolute;
   left: 12px;
-  top: -40px;
+  top: 0;
+  transform: translateY(-100%);
   background: var(--ink);
   color: white;
   padding: 8px 12px;
 }
-.skip:focus { top: 12px; z-index: 5; }
+.skip:focus { top: 12px; transform: none; z-index: 5; }
 
 .login-wrap {
   min-height: 100vh;
@@ -117,15 +118,16 @@ input:focus, select:focus, textarea:focus {
 
 .shell { min-height: 100vh; display: grid; grid-template-columns: 244px minmax(0, 1fr); }
 .rail {
+  position: relative;
   background: var(--ink);
   color: #d8e5f4;
-  padding: 28px 14px 18px;
-  border-top: 4px solid var(--danger);
+  padding: 32px 14px 18px;
   display: flex;
   flex-direction: column;
 }
+.rail::before { content: ""; position: absolute; inset: 0 0 auto; height: 4px; background: var(--danger); pointer-events: none; z-index: 1; }
 .rail-brand { display: flex; align-items: center; gap: 10px; padding: 0 12px 28px; border-bottom: 1px solid rgba(255,255,255,.12); }
-.rail-brand img { flex: none; width: 48px; height: 48px; object-fit: contain; border-radius: 50%; background: white; }
+.rail-brand img { flex: none; width: 48px; height: 48px; object-fit: cover; border-radius: 50%; background: white; }
 .brand-name { color: white; font-size: 17px; font-weight: 700; letter-spacing: .04em; margin: 0; }
 .brand-sub { color: #a8bfd8; font-size: 11px; margin: 1px 0 0; letter-spacing: .08em; }
 .nav-caption { margin: 25px 13px 10px; color: #849eba; font-size: 11px; font-weight: 700; letter-spacing: .12em; }
@@ -417,7 +419,7 @@ tbody tr:hover td { background: #f5f8fc; }
 
 @media (max-width: 800px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
-  .rail { padding: 12px 16px 8px; }
+  .rail { padding: 16px 16px 8px; }
   .rail-brand { padding: 0 0 10px; border: 0; }
   .rail-brand img { width: 36px; height: 36px; }
   .brand-name { font-size: 15px; }

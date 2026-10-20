@@ -45,6 +45,21 @@ const state = {
   certCode: '',
 };
 
+let noticeTimer;
+
+function clearNotice() {
+  if (noticeTimer) clearTimeout(noticeTimer);
+  noticeTimer = undefined;
+  state.notice = '';
+  document.querySelector('.banner.ok')?.remove();
+}
+
+function showNotice(message) {
+  if (noticeTimer) clearTimeout(noticeTimer);
+  state.notice = message;
+  noticeTimer = setTimeout(clearNotice, 5000);
+}
+
 function esc(value) {
   return String(value == null ? '' : value)
     .replace(/&/g, '&amp;')
@@ -78,7 +93,7 @@ function shell(title, body) {
   return `
     <div class="shell">
       <aside class="rail">
-        <div class="rail-brand"><img src="/brand-logo.png?v=2" alt="" width="48" height="48"><div><p class="brand-name">创大产控</p><p class="brand-sub">名片管理平台</p></div></div>
+        <div class="rail-brand"><img src="/brand-logo.png?v=3" alt="" width="48" height="48"><div><p class="brand-name">创大产控</p><p class="brand-sub">名片管理平台</p></div></div>
         <p class="nav-caption">工作区</p>
         <nav aria-label="后台">${nav}</nav>
         <div class="rail-foot"><span class="rail-foot-dot" aria-hidden="true"></span> 管理后台</div>
@@ -123,7 +138,7 @@ function renderLogin(message) {
   app.innerHTML = `
     <main class="login-wrap" id="main">
       <form class="login-panel" data-form="login">
-        <div class="seal" aria-hidden="true"><img src="/brand-logo.png?v=2" alt=""></div>
+        <div class="seal" aria-hidden="true"><img src="/brand-logo.png?v=3" alt=""></div>
         <p class="eyebrow">CHUANGDA</p>
         <h1>名片管理后台</h1>
         <p class="lede">管理员使用账号登录。员工名片在小程序里通过微信授权进入。</p>
@@ -206,7 +221,7 @@ function cardFace(kind) {
   if (kind === 'wave') {
     return `<div class="pv pv-wave"><img class="pv-wave-bg" src="/wave-front.jpg" alt=""><span class="pv-wv-name">张伟</span><span class="pv-wv-title">客户经理</span><span class="pv-wv-row pv-wv-phone">13800000000</span><span class="pv-wv-row pv-wv-email">zhangwei@chuangda.com</span><span class="pv-wv-row pv-wv-address">上海市浦东新区金桥红枫路288号</span><img class="pv-wv-qr" src="/official-qr.jpg" alt=""></div>`;
   }
-  return `<div class="pv pv-classic"><div class="pv-corp"><span class="pv-corp-cn">${esc(custom && custom.companyName || '上海创大产控高新技术集团有限公司')}</span><span class="pv-corp-en">${esc(custom && custom.companyNameEn || 'SHANGHAI CHUANGDA CHANKONG HI-TECH GROUP CO., LTD.')}</span></div><div class="pv-brand"><img class="pv-seal" src="/brand-logo.png?v=2" alt=""><span class="pv-brand-cn">${esc(custom && custom.shortName || '创大产控')}</span><span class="pv-brand-en">${esc(custom && custom.shortNameEn || 'CHUANGDACHANKONG')}</span></div><div class="pv-who"><span class="pv-name">张伟</span><span class="pv-title">客户经理</span></div><span class="pv-mobile">M:13800000000</span><span class="pv-tick"></span><div class="pv-contact"><span>电话/Tel:021-5888 6080</span><span>邮箱/E-mail:zhangwei@chuangda.com</span><span>地址/Add:上海市浦东新区金桥红枫路288号</span></div><img class="pv-qr" src="${esc(custom && custom.qrUrl || '/official-qr.jpg')}" alt=""></div>`;
+  return `<div class="pv pv-classic"><div class="pv-corp"><span class="pv-corp-cn">${esc(custom && custom.companyName || '上海创大产控高新技术集团有限公司')}</span><span class="pv-corp-en">${esc(custom && custom.companyNameEn || 'SHANGHAI CHUANGDA CHANKONG HI-TECH GROUP CO., LTD.')}</span></div><div class="pv-brand"><img class="pv-seal" src="/brand-logo.png?v=3" alt=""><span class="pv-brand-cn">${esc(custom && custom.shortName || '创大产控')}</span><span class="pv-brand-en">${esc(custom && custom.shortNameEn || 'CHUANGDACHANKONG')}</span></div><div class="pv-who"><span class="pv-name">张伟</span><span class="pv-title">客户经理</span></div><span class="pv-mobile">M:13800000000</span><span class="pv-tick"></span><div class="pv-contact"><span>电话/Tel:021-5888 6080</span><span>邮箱/E-mail:zhangwei@chuangda.com</span><span>地址/Add:上海市浦东新区金桥红枫路288号</span></div><img class="pv-qr" src="${esc(custom && custom.qrUrl || '/official-qr.jpg')}" alt=""></div>`;
 }
 
 function templateGallery() {
@@ -650,11 +665,13 @@ async function loadView(view) {
 
 async function route() {
   if (!token()) {
+    clearNotice();
     renderLogin();
     return;
   }
   const view = (location.hash || '#/overview').replace('#/', '') || 'overview';
   const known = views.some(([id]) => id === view);
+  if ((known ? view : 'overview') !== state.view) clearNotice();
   try {
     await loadView(known ? view : 'overview');
   } catch (err) {
@@ -748,7 +765,7 @@ async function saveEmployee(form) {
   if (id) await api('/api/employees/' + id, { method: 'PUT', body: data });
   else await api('/api/employees', { method: 'POST', body: data });
   state.editing = null;
-  state.notice = '名片已保存';
+  showNotice('名片已保存');
   await loadView('cards');
 }
 
@@ -758,7 +775,7 @@ document.addEventListener('submit', async (event) => {
   if (!kind) return;
   event.preventDefault();
   state.error = '';
-  state.notice = '';
+  clearNotice();
   try {
     if (kind === 'login') {
       const data = formData(form);
@@ -794,7 +811,7 @@ document.addEventListener('submit', async (event) => {
       }
       state.importIssues = result.rejected || [];
       const failed = state.importIssues.length;
-      state.notice = '已导入 ' + (result.items || []).length + ' 张名片' + (failed ? '，' + failed + ' 条因缺少手机号或其他原因未创建' : '');
+      showNotice('已导入 ' + (result.items || []).length + ' 张名片' + (failed ? '，' + failed + ' 条因缺少手机号或其他原因未创建' : ''));
       await loadView('import');
       return;
     }
@@ -805,13 +822,13 @@ document.addEventListener('submit', async (event) => {
         method: 'POST',
         body: { companyId: created.id, username: fields.username, password: fields.password },
       });
-      state.notice = '已创建公司和管理员账号';
+      showNotice('已创建公司和管理员账号');
       await loadView('companies');
       return;
     }
     if (kind === 'brand') {
       state.company = (await api('/api/company', { method: 'PUT', body: formData(form) })).company;
-      state.notice = '品牌已更新';
+      showNotice('品牌已更新');
       paint();
       return;
     }
@@ -837,7 +854,7 @@ document.addEventListener('submit', async (event) => {
         },
       });
       state.editingTemplate = '';
-      state.notice = fields.templateId ? '模板已更新' : '模板已创建并分配';
+      showNotice(fields.templateId ? '模板已更新' : '模板已创建并分配');
       await loadView('templates');
       return;
     }
@@ -928,7 +945,7 @@ document.addEventListener('click', async (event) => {
       if (!window.confirm('确定移除本公司的「' + assigned.name + '」模板？总部模板和其他公司的分配不会被删除，已有名片也不会被删除。')) return;
       await api('/api/templates/' + encodeURIComponent(id) + '/assignment', { method: 'DELETE' });
       state.previewTemplate = '';
-      state.notice = '已移除本公司的模板分配';
+      showNotice('已移除本公司的模板分配');
       await loadView('templates');
       return;
     }
@@ -977,7 +994,7 @@ document.addEventListener('click', async (event) => {
       if (!window.confirm('确定删除这张名片？该员工至少会保留一张名片。')) return;
       const wasEditing = !!state.editing;
       const saved = await api('/api/employees/' + id + '/cards/' + encodeURIComponent(cardId), { method: 'DELETE' });
-      state.notice = '已删除该名片';
+      showNotice('已删除该名片');
       await loadView('cards');
       if (wasEditing) {
         const employee = saved.employee;
@@ -992,7 +1009,7 @@ document.addEventListener('click', async (event) => {
         method: 'PUT',
         body: { status: action === 'restore' ? 'active' : 'disabled' },
       });
-      state.notice = action === 'restore' ? '账号已恢复，该员工可用原来的微信重新登录' : '已停用，对外名片不可见';
+      showNotice(action === 'restore' ? '账号已恢复，该员工可用原来的微信重新登录' : '已停用，对外名片不可见');
       await loadView('cards');
       return;
     }
@@ -1000,7 +1017,7 @@ document.addEventListener('click', async (event) => {
       const sourceId = (document.querySelector('#mergeSourceId').value || '').trim();
       await api('/api/employees/' + id + '/merge', { method: 'POST', body: { sourceId } });
       state.editing = null;
-      state.notice = '已合并，重复的那条已停用';
+      showNotice('已合并，重复的那条已停用');
       await loadView('cards');
       return;
     }
@@ -1008,11 +1025,11 @@ document.addEventListener('click', async (event) => {
       const verb = action === 'approve-cert' ? 'approve' : action === 'reject-cert' ? 'reject' : 'revoke';
       if (verb === 'revoke' && !window.confirm('取消后，这张名片上的该公司会被清除，对应子公司管理员将看不到这名员工。')) return;
       await api('/api/certifications/' + encodeURIComponent(id) + '/' + verb, { method: 'POST', body: {} });
-      state.notice = verb === 'approve'
+      showNotice(verb === 'approve'
         ? '已通过。员工可在编辑名片里选择这家公司'
         : verb === 'revoke'
           ? '已取消认证，该公司已从名片中移除'
-          : '已拒绝该申请';
+          : '已拒绝该申请');
       await loadView('cert');
       return;
     }
@@ -1021,7 +1038,7 @@ document.addEventListener('click', async (event) => {
       const ok = window.confirm('确定删除员工「' + (person ? person.name : '该员工') + '」及其全部名片记录？');
       if (!ok) return;
       await api('/api/employees/' + id, { method: 'DELETE' });
-      state.notice = '已删除';
+      showNotice('已删除');
       await loadView('cards');
     }
   } catch (err) {
