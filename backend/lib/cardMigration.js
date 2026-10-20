@@ -1,0 +1,38 @@
+const CARD_LIFECYCLES = new Set(['draft', 'active', 'archived']);
+
+function normalizeLegacyCard(card) {
+  if (!card || typeof card !== 'object') return card;
+  return {
+    ...card,
+    companyId: Object.prototype.hasOwnProperty.call(card, 'companyId')
+      ? String(card.companyId || '')
+      : 'default',
+    lifecycle: CARD_LIFECYCLES.has(card.lifecycle) ? card.lifecycle : 'active',
+    source: card.source || 'legacy_unknown',
+  };
+}
+
+function migratedPerson(person) {
+  if (!person || person.kind !== 'employee' || !Array.isArray(person.cards)) return person;
+  const cards = person.cards.map(normalizeLegacyCard);
+  const activeCards = cards.filter((card) => card && card.lifecycle === 'active');
+  const currentIsActive = activeCards.some((card) => card.id === person.activeCardId);
+  const fallback = activeCards.find((card) => card.isDefault) || activeCards[0] || null;
+  const activeCardId = currentIsActive ? person.activeCardId : (fallback ? fallback.id : '');
+  return { ...person, cards, activeCardId };
+}
+
+async function migrateCardRecords(store) {
+  const people = await store.listPeople({ kind: 'employee' });
+  let updated = 0;
+  for (const person of people) {
+    const next = migratedPerson(person);
+    if (JSON.stringify(next.cards) === JSON.stringify(person.cards)
+      && next.activeCardId === person.activeCardId) continue;
+    await store.updatePerson(person.id, next);
+    updated += 1;
+  }
+  return updated;
+}
+
+module.exports = { normalizeLegacyCard, migratedPerson, migrateCardRecords };

@@ -182,6 +182,7 @@ const store = {
       data.views = data.views.filter((view) => view.cardId !== id);
       data.sessions = data.sessions.filter((session) => session.userId !== id);
       data.codes = data.codes.filter((row) => row.userId !== id);
+      data.certifications = (data.certifications || []).filter((row) => row.personId !== id);
       return {
         ok: data.people.length !== before,
         files: Array.from(localUploadNames(person)),
@@ -205,7 +206,12 @@ const store = {
     const data = await snapshot();
     return data.holders
       .filter((item) => item.userId === userId)
-      .map((item) => ({ userId: item.userId, cardId: item.cardId, createdAt: item.createdAt }));
+      .map((item) => ({
+        userId: item.userId,
+        cardId: item.cardId,
+        shareCardId: item.shareCardId || '',
+        createdAt: item.createdAt,
+      }));
   },
   async hasHolderRef(userId, cardId) {
     const data = await snapshot();
@@ -230,11 +236,16 @@ const store = {
       });
     });
   },
-  async putHolderRef({ userId, cardId, createdAt }) {
+  async putHolderRef({ userId, cardId, shareCardId, createdAt, overwrite }) {
     return mutate((data) => {
       const existing = data.holders.find((item) => item.userId === userId && item.cardId === cardId);
-      if (existing) return { userId, cardId, createdAt: existing.createdAt, already: true };
-      const row = { userId, cardId, createdAt };
+      if (existing && !overwrite) return { ...existing, already: true };
+      if (existing) {
+        existing.shareCardId = shareCardId || existing.shareCardId || '';
+        existing.createdAt = createdAt || existing.createdAt;
+        return { ...existing, already: false };
+      }
+      const row = { userId, cardId, shareCardId: shareCardId || '', createdAt };
       data.holders.push(row);
       return { ...row, already: false };
     });
@@ -246,17 +257,24 @@ const store = {
       return before !== data.holders.length;
     });
   },
-  async listViews({ cardId } = {}) {
+  async listViews({ cardId, shareCardIds } = {}) {
     const data = await snapshot();
-    return data.views.filter((view) => !cardId || view.cardId === cardId);
+    const shareAllow = Array.isArray(shareCardIds) ? new Set(shareCardIds) : null;
+    return data.views.filter((view) => (
+      (!cardId || view.cardId === cardId)
+      && (!shareAllow || shareAllow.has(view.shareCardId))
+    ));
   },
-  async summarizeViews({ cardIds, from, to } = {}) {
+  async summarizeViews({ cardIds, shareCardIds, from, to } = {}) {
     const data = await snapshot();
     if (Array.isArray(cardIds) && !cardIds.length) return [];
+    if (Array.isArray(shareCardIds) && !shareCardIds.length) return [];
     const allow = Array.isArray(cardIds) ? new Set(cardIds) : null;
+    const shareAllow = Array.isArray(shareCardIds) ? new Set(shareCardIds) : null;
     const groups = new Map();
     for (const view of data.views) {
       if (allow && !allow.has(view.cardId)) continue;
+      if (shareAllow && !shareAllow.has(view.shareCardId)) continue;
       const day = String(view.startedAt || '').slice(0, 10);
       if (from && day < from) continue;
       if (to && day > to) continue;
@@ -278,13 +296,15 @@ const store = {
       exchanges: group.exchanges,
     }));
   },
-  async listViewsPage({ cardId, cardIds, from, to, limit = 50, offset = 0 } = {}) {
+  async listViewsPage({ cardId, cardIds, shareCardIds, from, to, limit = 50, offset = 0 } = {}) {
     const data = await snapshot();
     const allow = Array.isArray(cardIds) ? new Set(cardIds) : null;
+    const shareAllow = Array.isArray(shareCardIds) ? new Set(shareCardIds) : null;
     const filtered = data.views
       .filter((view) => {
         if (cardId && view.cardId !== cardId) return false;
         if (allow && !allow.has(view.cardId)) return false;
+        if (shareAllow && !shareAllow.has(view.shareCardId)) return false;
         const day = String(view.startedAt || '').slice(0, 10);
         if (from && day < from) return false;
         if (to && day > to) return false;
@@ -368,6 +388,29 @@ const store = {
       if (index >= 0) data.applications[index] = row;
       else data.applications.push(row);
       return row;
+    });
+  },
+  async listCertifications() {
+    const data = await snapshot();
+    return Array.isArray(data.certifications) ? data.certifications : [];
+  },
+  async saveCertification(row) {
+    return mutate((data) => {
+      if (!Array.isArray(data.certifications)) data.certifications = [];
+      const index = data.certifications.findIndex((item) => (
+        item.personId === row.personId && item.companyId === row.companyId
+      ));
+      if (index >= 0) data.certifications[index] = row;
+      else data.certifications.push(row);
+      return row;
+    });
+  },
+  async deleteCertificationsForPerson(personId) {
+    return mutate((data) => {
+      if (!Array.isArray(data.certifications)) data.certifications = [];
+      const before = data.certifications.length;
+      data.certifications = data.certifications.filter((item) => item.personId !== personId);
+      return before - data.certifications.length;
     });
   },
   async deleteApplicationsForPerson(personId) {

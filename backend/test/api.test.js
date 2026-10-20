@@ -134,9 +134,8 @@ test('employee card, holder, account and analytics', async () => {
   assert.notEqual(phoneSaved.json.employee.id, employeeId);
   assert.equal(phoneSaved.json.employee.name || '', '');
   const kept = await api('/api/cards/' + employeeId);
-  assert.equal(kept.status, 200);
-  assert.equal(kept.json.card.name, '测试员工');
-  assert.equal(kept.json.card.phone, '13811112222');
+  assert.equal(kept.status, 404);
+  assert.equal(kept.json.error.code, 'NO_ACTIVE_CARD');
   employeeId = phoneSaved.json.employee.id;
 
   const emailSaved = await api('/api/employee/me', {
@@ -163,7 +162,7 @@ test('employee card, holder, account and analytics', async () => {
   const noId = await api('/api/holder', { method: 'POST', token, body: {} });
   assert.equal(noId.status, 400);
   const selfFav = await api('/api/holder', { method: 'POST', token, body: { cardId: employeeId } });
-  assert.equal(selfFav.status, 400);
+  assert.equal(selfFav.status, 404);
 
   const favorite = await api('/api/holder', { method: 'POST', token, body: { cardId: 'emp-1001' } });
   assert.equal(favorite.status, 201);
@@ -218,8 +217,8 @@ test('employee card, holder, account and analytics', async () => {
   });
   assert.equal(restored.status, 200);
   const visible = await api('/api/cards/' + employeeId);
-  assert.equal(visible.status, 200);
-  assert.equal(visible.json.card.phone, '13811113333');
+  assert.equal(visible.status, 404);
+  assert.equal(visible.json.error.code, 'NO_ACTIVE_CARD');
 
   const imported = await api('/api/employees/batch', {
     method: 'POST',
@@ -604,6 +603,10 @@ test('company admin isolation and pinned share links', async () => {
   assert.equal(created.status, 201);
   const companyId = created.json.id;
 
+  assert.equal((await api('/api/templates/classic', {
+    method: 'PUT', token: hqToken, body: { companyIds: [companyId] },
+  })).status, 200);
+
   const adminCreated = await api('/api/company-admins', {
     method: 'POST',
     token: hqToken,
@@ -733,6 +736,20 @@ test('company admin isolation and pinned share links', async () => {
   assert.equal((await api('/api/cards/' + personId + '/qr?shareCard=card-missing')).status, 404);
   assert.equal((await api('/api/cards/' + personId + '/qr?shareCard=' + encodeURIComponent(ownCardId))).status, 200);
 
+  const hqMixedView = await api('/api/analytics/view', {
+    method: 'POST', body: { cardId: personId, shareCard: hqCardId, visitorId: 'v-hq-mixed' },
+  });
+  const subMixedView = await api('/api/analytics/view', {
+    method: 'POST', body: { cardId: personId, shareCard: ownCardId, visitorId: 'v-sub-mixed' },
+  });
+  assert.equal(hqMixedView.status, 201);
+  assert.equal(subMixedView.status, 201);
+  const scopedViews = await api('/api/analytics/list?cardId=' + personId, { token: subToken });
+  assert.equal(scopedViews.json.items.some((item) => item.id === hqMixedView.json.viewId), false);
+  assert.equal(scopedViews.json.items.some((item) => item.id === subMixedView.json.viewId), true);
+  const scopedSummary = await api('/api/analytics/summary?cardId=' + personId, { token: subToken });
+  assert.equal(scopedSummary.json.items[0].views, 1);
+
   await api('/api/analytics/view', { method: 'POST', body: { cardId: hqOnlyId, visitorId: 'v-secret' } });
   const list = await api('/api/analytics/list', { token: subToken });
   assert.equal(list.status, 200);
@@ -743,17 +760,23 @@ test('company admin isolation and pinned share links', async () => {
   const still = await api('/api/employees/' + personId, { token: hqToken });
   assert.equal(still.status, 200);
   assert.equal(still.json.employee.cards.some((card) => card.id === hqCardId), true);
-  assert.equal(still.json.employee.cards.some((card) => card.id === ownCardId), false);
+  assert.equal(still.json.employee.cards.some((card) => (
+    card.id === ownCardId && card.lifecycle === 'archived'
+  )), true);
 
   const subOnly = await api('/api/employees', {
     method: 'POST',
     token: subToken,
-    body: { name: '只有子公司', phone: '13911110003', title: '助理' },
+    body: {
+      name: '只有子公司', phone: '13911110003', title: '助理', cardTemplate: 'classic',
+    },
   });
-  assert.equal(subOnly.status, 201);
+  assert.equal(subOnly.status, 201, JSON.stringify(subOnly.json));
   const subOnlyId = subOnly.json.employee.id;
   assert.equal((await api('/api/employees/' + subOnlyId, { method: 'DELETE', token: subToken })).status, 200);
-  assert.equal((await api('/api/employees/' + subOnlyId, { token: hqToken })).status, 404);
+  const retained = await api('/api/employees/' + subOnlyId, { token: hqToken });
+  assert.equal(retained.status, 200);
+  assert.equal(retained.json.employee.cards[0].lifecycle, 'archived');
 });
 
 test('verified phones stay on this wechat and switch without a new code', async () => {
@@ -858,7 +881,38 @@ test('restored account can be switched into even if another wechat still holds i
   assert.equal(me.json.employee.id, phoneId);
 });
 
-test('employee certification assigns one card to one subsidiary', async () => {
+test('disabled v2 flag keeps the published legacy mini program working', async () => {
+  const previous = process.env.CARD_ACCESS_V2;
+  process.env.CARD_ACCESS_V2 = 'false';
+  try {
+    const login = await api('/api/auth/wechat', {
+      method: 'POST', body: { code: 'dev:legacy-client-compatibility' },
+    });
+    assert.equal(login.status, 200);
+    assert.equal(login.json.employee.cards.length, 1);
+    assert.equal(login.json.employee.cardTemplate, 'classic');
+
+    const templates = await api('/api/employee/templates', { token: login.json.token });
+    assert.deepEqual(templates.json.items.slice(0, 3).map((item) => item.id), [
+      'classic', 'horizon', 'wave',
+    ]);
+    const created = await api('/api/employee/cards', {
+      method: 'POST', token: login.json.token, body: { template: 'horizon' },
+    });
+    assert.equal(created.status, 201);
+    assert.equal(created.json.employee.companyId, '');
+    const edited = await api('/api/employee/me', {
+      method: 'PUT', token: login.json.token,
+      body: { name: '旧版客户端用户', company: '创大产控', companyId: '' },
+    });
+    assert.equal(edited.status, 200, JSON.stringify(edited.json));
+  } finally {
+    if (previous === undefined) delete process.env.CARD_ACCESS_V2;
+    else process.env.CARD_ACCESS_V2 = previous;
+  }
+});
+
+test('employee certification is account-level and enables the first subsidiary card', async () => {
   const hq = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
   assert.equal(hq.status, 200);
   const hqToken = hq.json.token;
@@ -873,6 +927,9 @@ test('employee certification assigns one card to one subsidiary', async () => {
   const code = created.json.company.certCode;
   assert.equal(typeof code, 'string');
   assert.ok(code);
+  assert.equal((await api('/api/templates/classic', {
+    method: 'PUT', token: hqToken, body: { companyIds: [companyId] },
+  })).status, 200);
 
   await api('/api/company-admins', {
     method: 'POST',
@@ -894,8 +951,8 @@ test('employee certification assigns one card to one subsidiary', async () => {
   assert.equal(wechat.status, 200);
   const token = wechat.json.token;
   const personId = wechat.json.employee.id;
-  const cardId = wechat.json.employee.activeCardId;
-  assert.ok(cardId);
+  assert.equal(wechat.json.employee.activeCardId, '');
+  assert.deepEqual(wechat.json.employee.cards, []);
 
   const choices = await api('/api/employee/companies', { token });
   assert.equal(choices.status, 200);
@@ -905,14 +962,14 @@ test('employee certification assigns one card to one subsidiary', async () => {
   const badCode = await api('/api/employee/certification', {
     method: 'POST',
     token,
-    body: { cardId, code: 'NOCODE' },
+    body: { code: 'NOCODE' },
   });
   assert.equal(badCode.status, 404);
 
   const applied = await api('/api/employee/certification', {
     method: 'POST',
     token,
-    body: { cardId, code },
+    body: { code },
   });
   assert.equal(applied.status, 201);
   assert.equal(applied.json.application.companyId, companyId);
@@ -920,11 +977,11 @@ test('employee certification assigns one card to one subsidiary', async () => {
   const sub = await api('/api/login', { method: 'POST', body: { username: 'certadmin', password: 'certpass1' } });
   const queue = await api('/api/certifications', { token: sub.json.token });
   assert.equal(queue.status, 200);
-  assert.equal(queue.json.items.some((item) => item.cardId === cardId), true);
+  assert.equal(queue.json.items.some((item) => item.personId === personId && item.companyId === companyId), true);
 
   const otherAdmin = await api('/api/login', { method: 'POST', body: { username: 'certadmin2', password: 'certpass2' } });
   const hidden = await api('/api/certifications', { token: otherAdmin.json.token });
-  assert.equal(hidden.json.items.some((item) => item.cardId === cardId), false);
+  assert.equal(hidden.json.items.some((item) => item.personId === personId && item.companyId === companyId), false);
 
   const approved = await api('/api/certifications/' + applied.json.application.id + '/approve', {
     method: 'POST',
@@ -934,14 +991,12 @@ test('employee certification assigns one card to one subsidiary', async () => {
   assert.equal(approved.status, 200);
 
   const untouched = await api('/api/employee/me', { token });
-  const beforeChoose = (untouched.json.employee.cards || []).find((card) => card.id === cardId);
-  assert.ok(beforeChoose);
-  assert.notEqual(beforeChoose.companyId, companyId);
+  assert.deepEqual(untouched.json.employee.cards, []);
 
   const hiddenEmployee = await api('/api/employees', { token: sub.json.token });
   assert.equal(hiddenEmployee.json.items.some((item) => item.id === personId), false);
 
-  const status = await api('/api/employee/certification?cardId=' + encodeURIComponent(cardId), { token });
+  const status = await api('/api/employee/certification', { token });
   assert.equal(status.json.companyId || '', '');
   assert.equal(status.json.certified.some((item) => item.companyId === companyId), true);
   assert.equal(status.json.pending.length, 0);
@@ -949,7 +1004,7 @@ test('employee certification assigns one card to one subsidiary', async () => {
   const second = await api('/api/employee/certification', {
     method: 'POST',
     token,
-    body: { cardId, companyId: other.json.id },
+    body: { companyId: other.json.id },
   });
   assert.equal(second.status, 201);
   assert.equal(second.json.application.companyId, other.json.id);
@@ -961,16 +1016,21 @@ test('employee certification assigns one card to one subsidiary', async () => {
   });
   assert.equal(secondApproved.status, 200);
 
-  const both = await api('/api/employee/certification?cardId=' + encodeURIComponent(cardId), { token });
+  const both = await api('/api/employee/certification', { token });
   assert.equal(both.json.certified.length, 2);
 
-  const chosen = await api('/api/employee/me', {
-    method: 'PUT',
-    token,
-    body: { company: '认证子公司', companyId },
+  const chosen = await api('/api/employee/cards', {
+    method: 'POST', token,
+    body: { template: 'classic', companyId },
   });
-  assert.equal(chosen.status, 200);
+  assert.equal(chosen.status, 201);
   assert.equal(chosen.json.employee.companyId, companyId);
+  const cardId = chosen.json.employee.activeCardId;
+  assert.ok(cardId);
+  const unassigned = await api('/api/employee/me', {
+    method: 'PUT', token, body: { companyId: '' },
+  });
+  assert.equal(unassigned.status, 400);
 
   const listed = await api('/api/employees', { token: sub.json.token });
   const visible = listed.json.items.find((item) => item.id === personId);
@@ -978,7 +1038,7 @@ test('employee certification assigns one card to one subsidiary', async () => {
   assert.equal(visible.cards.some((card) => card.id === cardId && card.companyId === companyId), true);
 
   const granted = await api('/api/certifications', { token: sub.json.token });
-  const approvedRow = granted.json.items.find((item) => item.cardId === cardId && item.companyId === companyId && item.status === 'approved');
+  const approvedRow = granted.json.items.find((item) => item.personId === personId && item.companyId === companyId && item.status === 'approved');
   assert.ok(approvedRow);
   const revoked = await api('/api/certifications/' + approvedRow.id + '/revoke', {
     method: 'POST',
@@ -989,11 +1049,23 @@ test('employee certification assigns one card to one subsidiary', async () => {
 
   const after = await api('/api/employee/me', { token });
   const cleared = (after.json.employee.cards || []).find((card) => card.id === cardId);
-  assert.equal(cleared.companyId || '', '');
-  assert.equal(cleared.company || '', '');
+  assert.equal(cleared.lifecycle, 'archived');
+  assert.equal(after.json.employee.activeCardId, '');
+  const archivedPublic = await api('/api/cards/' + personId + '?shareCard=' + encodeURIComponent(cardId));
+  assert.equal(archivedPublic.status, 404);
+  assert.equal(archivedPublic.json.error.code, 'CARD_ARCHIVED');
   const hiddenAgain = await api('/api/employees', { token: sub.json.token });
   assert.equal(hiddenAgain.json.items.some((item) => item.id === personId), false);
-  const left = await api('/api/employee/certification?cardId=' + encodeURIComponent(cardId), { token });
+  assert.equal((await api('/api/employees/' + personId, {
+    method: 'PUT', token: sub.json.token,
+    body: { cardId, name: '撤销后仍修改' },
+  })).status, 403);
+  const archivedDelete = await api('/api/employee/cards/' + cardId, {
+    method: 'DELETE', token,
+  });
+  assert.equal(archivedDelete.status, 409);
+  assert.equal(archivedDelete.json.error.code, 'CARD_ARCHIVED');
+  const left = await api('/api/employee/certification', { token });
   assert.equal(left.json.certified.some((item) => item.companyId === companyId), false);
   assert.equal(left.json.certified.some((item) => item.companyId === other.json.id), true);
 
@@ -1035,7 +1107,7 @@ test('hq admin sees a self-registered card that has no company', async () => {
   assert.equal(subList.json.items.some((item) => item.id === wechat.json.employee.id), false);
 });
 
-test('certification keeps one pending review for one user and subsidiary across cards', async () => {
+test('certification keeps one pending review for one user and enterprise', async () => {
   const hq = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
   const company = await api('/api/companies', {
     method: 'POST',
@@ -1044,17 +1116,14 @@ test('certification keeps one pending review for one user and subsidiary across 
   });
   const wechat = await api('/api/auth/wechat', { method: 'POST', body: { code: 'dev:cert-deduplicate' } });
   const token = wechat.json.token;
-  const firstCardId = wechat.json.employee.activeCardId;
-  const anotherCard = await api('/api/employee/cards', { method: 'POST', token, body: { template: 'wave' } });
-  assert.equal(anotherCard.status, 201);
-  const secondCardId = anotherCard.json.employee.activeCardId;
+  assert.equal(wechat.json.employee.activeCardId, '');
 
   const first = await api('/api/employee/certification', {
-    method: 'POST', token, body: { cardId: firstCardId, companyId: company.json.id },
+    method: 'POST', token, body: { companyId: company.json.id },
   });
   assert.equal(first.status, 201);
   const retry = await api('/api/employee/certification', {
-    method: 'POST', token, body: { cardId: secondCardId, companyId: company.json.id },
+    method: 'POST', token, body: { companyId: company.json.id },
   });
   assert.equal(retry.status, 200);
   assert.equal(retry.json.alreadyPending, true);
@@ -1142,7 +1211,7 @@ test('employee sees and creates a subsidiary template only after certification',
   const token = user.json.token;
   const before = await api('/api/employee/templates', { token });
   assert.equal(before.status, 200);
-  assert.deepEqual(before.json.items.map((item) => item.id), ['classic', 'horizon', 'wave']);
+  assert.deepEqual(before.json.items, []);
   assert.equal(before.json.items.some((item) => item.id === templateId), false);
   assert.equal((await api('/api/employee/cards', {
     method: 'POST', token, body: { template: templateId, companyId: company.json.id },
@@ -1150,7 +1219,7 @@ test('employee sees and creates a subsidiary template only after certification',
 
   const application = await api('/api/employee/certification', {
     method: 'POST', token,
-    body: { cardId: user.json.employee.activeCardId, companyId: company.json.id },
+    body: { companyId: company.json.id },
   });
   const pending = await api('/api/employee/templates', { token });
   assert.equal(pending.json.items.some((item) => item.id === templateId), false);
@@ -1182,7 +1251,7 @@ test('employee sees and creates a subsidiary template only after certification',
   })).status, 403);
 });
 
-test('subsidiary admin can remove only its own template assignment', async () => {
+test('only hq can change template assignments', async () => {
   const hq = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
   const first = await api('/api/companies', {
     method: 'POST', token: hq.json.token, body: { name: '移除模板公司甲', shortName: '甲公司' },
@@ -1210,7 +1279,7 @@ test('subsidiary admin can remove only its own template assignment', async () =>
   const employee = await api('/api/auth/wechat', { method: 'POST', body: { code: 'dev:remove-template-employee' } });
   const application = await api('/api/employee/certification', {
     method: 'POST', token: employee.json.token,
-    body: { cardId: employee.json.employee.activeCardId, companyId: first.json.id },
+    body: { companyId: first.json.id },
   });
   await api('/api/certifications/' + application.json.application.id + '/approve', {
     method: 'POST', token: hq.json.token, body: {},
@@ -1221,9 +1290,13 @@ test('subsidiary admin can remove only its own template assignment', async () =>
   })).status, 403);
   assert.equal((await api('/api/templates/classic/assignment', {
     method: 'DELETE', token: admin1.json.token,
-  })).status, 404);
-  const removed = await api('/api/templates/' + id + '/assignment', {
+  })).status, 403);
+  assert.equal((await api('/api/templates/' + id + '/assignment', {
     method: 'DELETE', token: admin1.json.token,
+  })).status, 403);
+  const removed = await api('/api/templates/' + id, {
+    method: 'PUT', token: hq.json.token,
+    body: { name: '两家公司共用模板', companyIds: [second.json.id] },
   });
   assert.equal(removed.status, 200);
   assert.deepEqual(removed.json.template.companyIds, [second.json.id]);
@@ -1233,16 +1306,30 @@ test('subsidiary admin can remove only its own template assignment', async () =>
   assert.equal((await api('/api/employee/templates', { token: employee.json.token })).json.items.some((item) => item.id === id), false);
   assert.equal((await api('/api/templates/' + id + '/assignment', {
     method: 'DELETE', token: admin1.json.token,
-  })).status, 404);
+  })).status, 403);
 });
 
 test('hq can find an employee by an inactive card and receives every card', async () => {
   const hq = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
   const employee = await api('/api/auth/wechat', { method: 'POST', body: { code: 'dev:hq-all-cards-search' } });
   const token = employee.json.token;
-  const firstCardId = employee.json.employee.activeCardId;
+  const root = await api('/api/company?id=default', { token: hq.json.token });
+  const application = await api('/api/employee/certification', {
+    method: 'POST', token, body: { companyId: 'default', code: root.json.company.certCode },
+  });
+  assert.equal(application.status, 201);
+  assert.equal((await api('/api/certifications/' + application.json.application.id + '/approve', {
+    method: 'POST', token: hq.json.token, body: {},
+  })).status, 200);
+  const first = await api('/api/employee/cards', {
+    method: 'POST', token, body: { template: 'classic', companyId: 'default' },
+  });
+  assert.equal(first.status, 201);
+  const firstCardId = first.json.employee.activeCardId;
   await api('/api/employee/me', { method: 'PUT', token, body: { name: '总部默认名片' } });
-  const added = await api('/api/employee/cards', { method: 'POST', token, body: { template: 'horizon' } });
+  const added = await api('/api/employee/cards', {
+    method: 'POST', token, body: { template: 'horizon', companyId: 'default' },
+  });
   assert.equal(added.status, 201);
   assert.equal((await api('/api/employee/me', {
     method: 'PUT', token, body: { name: '只在第二张名片的检索词' },
@@ -1255,4 +1342,59 @@ test('hq can find an employee by an inactive card and receives every card', asyn
   assert.ok(found);
   assert.equal(found.cards.length, 2);
   assert.equal(found.cards.some((card) => card.name === '只在第二张名片的检索词'), true);
+});
+
+test('holder pins one employee card and hides it after certification revocation', async () => {
+  const hq = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
+  const target = await api('/api/auth/wechat', { method: 'POST', body: { code: 'dev:holder-pinned-target' } });
+  const targetToken = target.json.token;
+  const root = await api('/api/company?id=default', { token: hq.json.token });
+  const application = await api('/api/employee/certification', {
+    method: 'POST', token: targetToken,
+    body: { companyId: 'default', code: root.json.company.certCode },
+  });
+  assert.equal(application.status, 201);
+  assert.equal((await api('/api/certifications/' + application.json.application.id + '/approve', {
+    method: 'POST', token: hq.json.token, body: {},
+  })).status, 200);
+
+  const first = await api('/api/employee/cards', {
+    method: 'POST', token: targetToken, body: { template: 'classic', companyId: 'default' },
+  });
+  assert.equal(first.status, 201);
+  const firstCardId = first.json.employee.activeCardId;
+  assert.equal((await api('/api/employee/me', {
+    method: 'PUT', token: targetToken, body: { name: '收藏测试第一张' },
+  })).status, 200);
+  const second = await api('/api/employee/cards', {
+    method: 'POST', token: targetToken, body: { template: 'horizon', companyId: 'default' },
+  });
+  assert.equal(second.status, 201);
+  const secondCardId = second.json.employee.activeCardId;
+  assert.equal((await api('/api/employee/me', {
+    method: 'PUT', token: targetToken, body: { name: '收藏测试第二张' },
+  })).status, 200);
+
+  const viewer = await api('/api/auth/wechat', { method: 'POST', body: { code: 'dev:holder-pinned-viewer' } });
+  const saved = await api('/api/holder', {
+    method: 'POST', token: viewer.json.token,
+    body: { cardId: target.json.employee.id, shareCardId: secondCardId },
+  });
+  assert.equal(saved.status, 201);
+  assert.equal(saved.json.item.shareCardId, secondCardId);
+  assert.equal(saved.json.item.card.name, '收藏测试第二张');
+
+  assert.equal((await api('/api/employee/cards/active', {
+    method: 'PUT', token: targetToken, body: { cardId: firstCardId },
+  })).status, 200);
+  const pinned = await api('/api/holder', { token: viewer.json.token });
+  const pinnedItem = pinned.json.items.find((item) => item.cardId === target.json.employee.id);
+  assert.equal(pinnedItem.shareCardId, secondCardId);
+  assert.equal(pinnedItem.card.name, '收藏测试第二张');
+
+  assert.equal((await api('/api/certifications/' + application.json.application.id + '/revoke', {
+    method: 'POST', token: hq.json.token, body: {},
+  })).status, 200);
+  const afterRevoke = await api('/api/holder', { token: viewer.json.token });
+  assert.equal(afterRevoke.json.items.some((item) => item.cardId === target.json.employee.id), false);
 });

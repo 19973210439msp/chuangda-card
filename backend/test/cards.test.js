@@ -8,6 +8,8 @@ const {
   addCard,
 } = require('../lib/cards');
 const { blankPerson, toCard } = require('../lib/person');
+const { publicCardState } = require('../lib/cardAccess');
+const { migratedPerson, migrateCardRecords } = require('../lib/cardMigration');
 
 test('employee accounts can remain without a synthetic card', () => {
   const person = blankPerson({
@@ -65,4 +67,43 @@ test('the first real card can be created from a zero-card account', () => {
   assert.equal(saved.cards[0].companyId, 'company-a');
   assert.equal(saved.cards[0].lifecycle, 'active');
   assert.equal(saved.activeCardId, saved.cards[0].id);
+});
+
+test('public card state distinguishes no card, archived card and inactive account', () => {
+  const empty = blankPerson({ id: 'emp-empty-public', cards: [] });
+  assert.equal(publicCardState(empty).code, 'NO_ACTIVE_CARD');
+
+  const archived = blankPerson({
+    id: 'emp-archived',
+    activeCardId: 'card-old',
+    cards: [{
+      id: 'card-old', template: 'classic', lifecycle: 'archived', isDefault: true, companyId: 'default',
+    }],
+  });
+  assert.equal(publicCardState(archived, 'card-old').code, 'CARD_ARCHIVED');
+
+  const inactive = { ...empty, status: 'disabled' };
+  assert.equal(publicCardState(inactive).code, 'CARD_UNAVAILABLE');
+});
+
+test('legacy card migration persists lifecycle and source without inventing a card', async () => {
+  const legacy = {
+    id: 'emp-legacy', kind: 'employee', status: 'active', activeCardId: 'card-old',
+    cards: [{ id: 'card-old', template: 'classic', isDefault: true, name: '存量员工' }],
+  };
+  const migrated = migratedPerson(legacy);
+  assert.equal(migrated.cards[0].companyId, 'default');
+  assert.equal(migrated.cards[0].lifecycle, 'active');
+  assert.equal(migrated.cards[0].source, 'legacy_unknown');
+
+  const empty = migratedPerson({ id: 'emp-empty', kind: 'employee', cards: [], activeCardId: '' });
+  assert.deepEqual(empty.cards, []);
+
+  const updates = [];
+  const count = await migrateCardRecords({
+    async listPeople() { return [legacy, empty]; },
+    async updatePerson(id, person) { updates.push({ id, person }); },
+  });
+  assert.equal(count, 1);
+  assert.equal(updates[0].id, legacy.id);
 });

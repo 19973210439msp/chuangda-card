@@ -73,7 +73,26 @@ function seedData() {
       address: company.address,
       createdAt: '2026-03-02T08:00:00.000Z',
     }),
-  ];
+  ].map((person) => ({
+    ...person,
+    activeCardId: 'card-default',
+    cards: [{
+      id: 'card-default',
+      template: 'classic',
+      isDefault: true,
+      name: person.name,
+      company: person.company,
+      title: person.title,
+      phone: person.phone,
+      wechat: person.wechat,
+      email: person.email,
+      address: person.address,
+      companyId: 'default',
+      lifecycle: 'active',
+      source: 'hq_issued',
+      attachments: [],
+    }],
+  }));
   const views = [
     {
       id: 'view-seed-1',
@@ -100,7 +119,7 @@ function seedData() {
       exchange: null,
     },
   ];
-  return { company, people, holders: [], views, sessions: [], codes: [] };
+  return { company, people, holders: [], views, sessions: [], codes: [], certifications: [] };
 }
 
 function toCard(person) {
@@ -173,6 +192,7 @@ function initialStoreData() {
     views: [],
     sessions: [],
     codes: [],
+    certifications: [],
   };
 }
 

@@ -6,8 +6,11 @@ let pool;
 let oss;
 let readyPromise;
 
-function pointerBody(userId, cardId) {
-  return { userId, cardId };
+function pointerBody(userId, cardId, shareCardId, createdAt) {
+  const body = { userId, cardId };
+  if (shareCardId) body.shareCardId = shareCardId;
+  if (createdAt) body.createdAt = createdAt;
+  return body;
 }
 
 function pointerKey(userId, cardId) {
@@ -102,6 +105,16 @@ async function ensureSchema() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS card_applications_company_idx ON card_applications (company_id, status);
+    CREATE TABLE IF NOT EXISTS company_certifications (
+      person_id TEXT NOT NULL,
+      company_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      data JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (person_id, company_id)
+    );
+    CREATE INDEX IF NOT EXISTS company_certifications_company_idx
+      ON company_certifications (company_id, status);
     CREATE TABLE IF NOT EXISTS verify_codes (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -301,6 +314,7 @@ const store = {
     await query('DELETE FROM views WHERE card_id = $1', [id]);
     await query('DELETE FROM sessions WHERE user_id = $1', [id]);
     await query('DELETE FROM verify_codes WHERE user_id = $1', [id]);
+    await query('DELETE FROM company_certifications WHERE person_id = $1', [id]);
     await store.deleteHolderRefs(id);
     await store.deleteHolderRefsForCard(id);
     await store.deleteUploadsForUser(id);
@@ -329,10 +343,18 @@ const store = {
         const name = object.name || '';
         const cardId = name.slice(prefix.length).replace(/\.json$/, '');
         if (!cardId || cardId.indexOf('/') >= 0) continue;
+        let body = {};
+        try {
+          const result = await oss.get(name);
+          body = JSON.parse(Buffer.from(result.content).toString('utf8'));
+        } catch (err) {
+          if (!(err.status === 404 || err.code === 'NoSuchKey')) throw err;
+        }
         refs.push({
           userId,
           cardId,
-          createdAt: object.lastModified,
+          shareCardId: body.shareCardId || '',
+          createdAt: body.createdAt || object.lastModified,
         });
       }
       marker = listed.isTruncated ? listed.nextMarker : null;
@@ -361,7 +383,12 @@ const store = {
   async reassignHolderUser(fromId, toId) {
     const refs = await store.listHolderRefs(fromId);
     for (const ref of refs) {
-      await store.putHolderRef({ userId: toId, cardId: ref.cardId, createdAt: ref.createdAt || new Date().toISOString() });
+      await store.putHolderRef({
+        userId: toId,
+        cardId: ref.cardId,
+        shareCardId: ref.shareCardId || '',
+        createdAt: ref.createdAt || new Date().toISOString(),
+      });
     }
     await store.deleteHolderRefs(fromId);
   },
@@ -390,14 +417,18 @@ const store = {
       contentType: headers['content-type'] || 'application/octet-stream',
     };
   },
-  async putHolderRef({ userId, cardId, createdAt, overwrite }) {
+  async putHolderRef({ userId, cardId, shareCardId, createdAt, overwrite }) {
     const key = pointerKey(userId, cardId);
     if (!overwrite) {
       const exists = await store.hasHolderRef(userId, cardId);
-      if (exists) return { userId, cardId, createdAt, already: true };
+      if (exists) {
+        const refs = await store.listHolderRefs(userId);
+        const existing = refs.find((item) => item.cardId === cardId);
+        return { ...(existing || { userId, cardId, shareCardId: '', createdAt }), already: true };
+      }
     }
-    await oss.put(key, Buffer.from(JSON.stringify(pointerBody(userId, cardId))));
-    return { userId, cardId, createdAt, already: false };
+    await oss.put(key, Buffer.from(JSON.stringify(pointerBody(userId, cardId, shareCardId, createdAt))));
+    return { userId, cardId, shareCardId: shareCardId || '', createdAt, already: false };
   },
   async deleteHolderRef(userId, cardId) {
     const key = pointerKey(userId, cardId);
@@ -406,19 +437,35 @@ const store = {
     await oss.delete(key);
     return true;
   },
-  async listViews({ cardId } = {}) {
-    const result = cardId
-      ? await query('SELECT data FROM views WHERE card_id = $1 ORDER BY started_at DESC', [cardId])
-      : await query('SELECT data FROM views ORDER BY started_at DESC');
+  async listViews({ cardId, shareCardIds } = {}) {
+    const params = [];
+    const where = [];
+    if (cardId) {
+      params.push(cardId);
+      where.push('card_id = $' + params.length);
+    }
+    if (Array.isArray(shareCardIds)) {
+      params.push(shareCardIds);
+      where.push("data->>'shareCardId' = ANY($" + params.length + ')');
+    }
+    const result = await query(
+      'SELECT data FROM views ' + (where.length ? 'WHERE ' + where.join(' AND ') : '') + ' ORDER BY started_at DESC',
+      params
+    );
     return result.rows.map((row) => row.data);
   },
-  async summarizeViews({ cardIds, from, to } = {}) {
+  async summarizeViews({ cardIds, shareCardIds, from, to } = {}) {
     if (Array.isArray(cardIds) && !cardIds.length) return [];
+    if (Array.isArray(shareCardIds) && !shareCardIds.length) return [];
     const params = [];
     const where = [];
     if (Array.isArray(cardIds)) {
       params.push(cardIds);
       where.push('card_id = ANY($' + params.length + ')');
+    }
+    if (Array.isArray(shareCardIds)) {
+      params.push(shareCardIds);
+      where.push("data->>'shareCardId' = ANY($" + params.length + ')');
     }
     if (from) {
       params.push(from);
@@ -444,7 +491,7 @@ const store = {
     const result = await query(sql, params);
     return result.rows;
   },
-  async listViewsPage({ cardId, cardIds, from, to, limit = 50, offset = 0 } = {}) {
+  async listViewsPage({ cardId, cardIds, shareCardIds, from, to, limit = 50, offset = 0 } = {}) {
     const params = [];
     const where = [];
     if (cardId) {
@@ -454,6 +501,10 @@ const store = {
     if (Array.isArray(cardIds)) {
       params.push(cardIds);
       where.push('card_id = ANY($' + params.length + ')');
+    }
+    if (Array.isArray(shareCardIds)) {
+      params.push(shareCardIds);
+      where.push("data->>'shareCardId' = ANY($" + params.length + ')');
     }
     if (from) {
       params.push(from);
@@ -555,6 +606,26 @@ const store = {
       [row.id, row.personId, row.cardId, row.companyId, row.status, JSON.stringify(row)]
     );
     return row;
+  },
+  async listCertifications() {
+    const result = await query('SELECT data FROM company_certifications ORDER BY updated_at DESC');
+    return result.rows.map((row) => row.data);
+  },
+  async saveCertification(row) {
+    await query(
+      `INSERT INTO company_certifications (person_id, company_id, status, data, updated_at)
+       VALUES ($1, $2, $3, $4::jsonb, NOW())
+       ON CONFLICT (person_id, company_id) DO UPDATE SET
+         status = EXCLUDED.status,
+         data = EXCLUDED.data,
+         updated_at = NOW()`,
+      [row.personId, row.companyId, row.status, JSON.stringify(row)]
+    );
+    return row;
+  },
+  async deleteCertificationsForPerson(personId) {
+    const result = await query('DELETE FROM company_certifications WHERE person_id = $1', [personId]);
+    return result.rowCount;
   },
   async insertCode(row) {
     await query(

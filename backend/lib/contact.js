@@ -1,12 +1,14 @@
 const crypto = require('crypto');
+const config = require('../config');
 const { httpError } = require('./errors');
 const { assertPhoneAvailable, findOccupyingPhone } = require('./identity');
 const { claimImportedCard } = require('./claim');
-const { subsidiaryId } = require('./certify');
 const { blankPerson, nowIso } = require('./person');
 const { consumeCode } = require('./verify');
 const { phoneFromWechatCode } = require('./wechat');
 const { writeActive, assignCardCompany, ensureCards } = require('./cards');
+const { approvedCompanyIds } = require('./certifications');
+const { templateGrantedTo } = require('./templates');
 const {
   text,
   normalizePhone,
@@ -58,17 +60,33 @@ async function saveSelfCard(store, person, body) {
     const wanted = String(body.companyId || '');
     const ready = ensureCards(person);
     const active = ready.cards.find((card) => card.id === ready.activeCardId) || ready.cards[0];
-    const owned = subsidiaryId(active);
-    const approvedIds = (await store.listApplications())
-      .filter((item) => item.personId === person.id && item.cardId === active.id && item.status === 'approved')
-      .map((item) => item.companyId);
-    const allowed = new Set(approvedIds.filter(Boolean));
-    if (owned) allowed.add(owned);
-    if (wanted && wanted !== 'default' && !allowed.has(wanted)) {
-      throw httpError(403, 'FORBIDDEN', '只能选择总公司或已认证的子公司');
+    if (!active) throw httpError(409, 'NO_ACTIVE_CARD', '请先通过企业认证并创建名片');
+    if (!config.cardAccessV2Enabled()) {
+      const allowed = await approvedCompanyIds(store, person.id);
+      if (active.companyId) allowed.add(active.companyId);
+      if (wanted && wanted !== 'default' && !allowed.has(wanted)) {
+        throw httpError(403, 'FORBIDDEN', '只能选择总公司或已认证的子公司');
+      }
+      const legacyCompanyId = !wanted || wanted === 'default' ? '' : wanted;
+      const assigned = assignCardCompany(synced, synced.activeCardId, legacyCompanyId, synced.company);
+      if (assigned) synced = assigned;
+      synced.updatedAt = next.updatedAt;
+      return store.updatePerson(person.id, synced);
     }
-    const companyId = !wanted || wanted === 'default' ? '' : wanted;
-    const assigned = assignCardCompany(synced, synced.activeCardId, companyId, synced.company);
+    if (!wanted) throw httpError(400, 'VALIDATION_ERROR', '请选择已认证企业');
+    const owned = String(active.companyId || '');
+    const allowed = await approvedCompanyIds(store, person.id);
+    if (owned) allowed.add(owned);
+    if (!allowed.has(wanted)) {
+      throw httpError(403, 'FORBIDDEN', '只能选择已认证企业');
+    }
+    const root = await store.getCompany('default');
+    if (!templateGrantedTo(root, active.template, wanted)) {
+      throw httpError(403, 'TEMPLATE_FORBIDDEN', '该企业未获得这套名片模板');
+    }
+    const company = await store.getCompany(wanted);
+    if (!company) throw httpError(404, 'NOT_FOUND', '企业不存在');
+    const assigned = assignCardCompany(synced, synced.activeCardId, wanted, company.name || '');
     if (assigned) synced = assigned;
   }
   synced.updatedAt = next.updatedAt;
@@ -208,7 +226,7 @@ async function openPhoneAccount(store, person, phone, sessionToken) {
     return { employee: saved, claimed: true };
   }
   await assertPhoneAvailable(store, phone, person.id);
-  const card = {
+  const legacyCard = config.cardAccessV2Enabled() ? null : {
     id: 'card-default',
     template: 'classic',
     isDefault: true,
@@ -220,6 +238,8 @@ async function openPhoneAccount(store, person, phone, sessionToken) {
     email: '',
     address: '',
     companyId: '',
+    lifecycle: 'active',
+    source: 'legacy_registration',
     attachments: [],
   };
   const fresh = blankPerson({
@@ -228,8 +248,8 @@ async function openPhoneAccount(store, person, phone, sessionToken) {
     openid: person.openid || '',
     phone,
     authPhone: phone,
-    cards: [card],
-    activeCardId: card.id,
+    cards: legacyCard ? [legacyCard] : [],
+    activeCardId: legacyCard ? legacyCard.id : '',
   });
   await store.insertPerson(fresh);
   if (sessionToken) await store.reassignSessionUser(sessionToken, fresh.id);

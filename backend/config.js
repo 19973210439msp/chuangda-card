@@ -22,6 +22,13 @@ function wechatSkipAllowed() {
   return process.env.SKIP_WECHAT_AUTH === 'true' && process.env.NODE_ENV !== 'production';
 }
 
+function cardAccessV2Enabled() {
+  const configured = String(process.env.CARD_ACCESS_V2 || '').trim().toLowerCase();
+  if (configured === 'true') return true;
+  if (configured === 'false') return false;
+  return process.env.NODE_ENV !== 'production';
+}
+
 function missingPgOssConfig() {
   const missing = [];
   if (!(process.env.DATABASE_URL || '').trim()) missing.push('DATABASE_URL');
@@ -52,6 +59,7 @@ module.exports = {
   dataFile,
   uploadDir,
   wechatSkipAllowed,
+  cardAccessV2Enabled,
   missingPgOssConfig,
   assertPgOssConfig,
   publicBase,

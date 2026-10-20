@@ -4,6 +4,7 @@ const { asyncRoute, httpError } = require('../lib/errors');
 const { requireEmployee } = require('../lib/access');
 const { getStore } = require('../storage');
 const { nowIso, blankPerson, toCard } = require('../lib/person');
+const { publicCardState } = require('../lib/cardAccess');
 const { text, normalizePhone } = require('../lib/validate');
 
 const router = express.Router();
@@ -15,11 +16,17 @@ async function holderItems(userId) {
   for (const ref of refs) {
     const card = await store.getPerson(ref.cardId);
     if (!card) continue;
-    if (card.kind === 'employee' && card.status !== 'active') continue;
+    let visible = card;
+    if (card.kind === 'employee') {
+      const state = publicCardState(card, ref.shareCardId || '');
+      if (!state.ok) continue;
+      visible = state.person;
+    }
     items.push({
       cardId: ref.cardId,
+      shareCardId: ref.shareCardId || '',
       savedAt: ref.createdAt,
-      card: toCard(card),
+      card: toCard(visible),
     });
   }
   items.sort((a, b) => String(b.savedAt).localeCompare(String(a.savedAt)));
@@ -68,15 +75,27 @@ router.post('/', asyncRoute(async (req, res) => {
   if (!cardId) throw httpError(400, 'VALIDATION_ERROR', '收藏需要 cardId');
   const store = getStore();
   const card = await store.getPerson(cardId);
-  if (!card || card.kind !== 'employee' || card.status !== 'active') {
+  const shareCardId = text(req.body && req.body.shareCardId, 64);
+  const state = publicCardState(card, shareCardId);
+  if (!state.ok) {
     throw httpError(404, 'CARD_NOT_FOUND', '只能收藏本系统中的有效名片');
   }
   if (card.id === user.id) throw httpError(400, 'VALIDATION_ERROR', '不能收藏自己的名片');
-  if (!(await store.hasHolderRef(user.id, cardId))) await assertNotDuplicate(user.id, card);
-  const saved = await store.putHolderRef({ userId: user.id, cardId, createdAt: nowIso() });
+  if (!(await store.hasHolderRef(user.id, cardId))) await assertNotDuplicate(user.id, state.person);
+  const saved = await store.putHolderRef({
+    userId: user.id,
+    cardId,
+    shareCardId: state.card.id,
+    createdAt: nowIso(),
+  });
   res.status(saved.already ? 200 : 201).json({
     already: saved.already,
-    item: { cardId, savedAt: saved.createdAt, card: toCard(card) },
+    item: {
+      cardId,
+      shareCardId: saved.shareCardId || state.card.id,
+      savedAt: saved.createdAt,
+      card: toCard(state.person),
+    },
   });
 }));
 

@@ -24,6 +24,15 @@ test('storage defaults to json and pg-oss refuses a partial setup', () => {
   const pointer = pointerBody('emp-1', 'emp-2');
   assert.deepEqual(pointer, { userId: 'emp-1', cardId: 'emp-2' });
   assert.deepEqual(Object.keys(pointer).sort(), ['cardId', 'userId']);
+  assert.deepEqual(
+    pointerBody('emp-1', 'emp-2', 'card-secondary', '2026-10-20T00:00:00.000Z'),
+    {
+      userId: 'emp-1',
+      cardId: 'emp-2',
+      shareCardId: 'card-secondary',
+      createdAt: '2026-10-20T00:00:00.000Z',
+    }
+  );
 
   if (previousDriver === undefined) delete process.env.STORAGE_DRIVER;
   else process.env.STORAGE_DRIVER = previousDriver;
@@ -64,6 +73,69 @@ test('production cannot skip WeChat auth', () => {
   process.env.NODE_ENV = previousNode;
   if (previousSkip === undefined) delete process.env.SKIP_WECHAT_AUTH;
   else process.env.SKIP_WECHAT_AUTH = previousSkip;
+});
+
+test('card access v2 is safe by default in production and can be enabled explicitly', () => {
+  const config = require('../config');
+  const previousNode = process.env.NODE_ENV;
+  const previousFlag = process.env.CARD_ACCESS_V2;
+  try {
+    process.env.NODE_ENV = 'production';
+    delete process.env.CARD_ACCESS_V2;
+    assert.equal(config.cardAccessV2Enabled(), false);
+    process.env.CARD_ACCESS_V2 = 'true';
+    assert.equal(config.cardAccessV2Enabled(), true);
+    process.env.CARD_ACCESS_V2 = 'false';
+    assert.equal(config.cardAccessV2Enabled(), false);
+    process.env.NODE_ENV = 'test';
+    delete process.env.CARD_ACCESS_V2;
+    assert.equal(config.cardAccessV2Enabled(), true);
+  } finally {
+    if (previousNode === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNode;
+    if (previousFlag === undefined) delete process.env.CARD_ACCESS_V2;
+    else process.env.CARD_ACCESS_V2 = previousFlag;
+  }
+});
+
+test('card access audit reports migration risks without exposing card fields', () => {
+  const { summarizeCardAccess } = require('../lib/cardAudit');
+  const summary = summarizeCardAccess({
+    people: [
+      { kind: 'employee', cards: [] },
+      {
+        kind: 'employee',
+        cards: [
+          { id: 'card-default', companyId: '', lifecycle: 'active', source: 'legacy_unknown' },
+          { id: 'card-real', companyId: '', name: '测试员工' },
+        ],
+      },
+      { kind: 'ocr', cards: [] },
+    ],
+    companies: [{ id: 'default' }, { id: 'sub-1' }],
+    certifications: [{ status: 'approved' }, { status: 'pending' }],
+    rootCompany: {
+      cardTemplateGrants: { classic: ['sub-1'], horizon: [] },
+      cardTemplates: [{ id: 'tpl-1' }],
+    },
+  });
+  assert.deepEqual(summary, {
+    employees: 2,
+    totalCards: 2,
+    zeroCardAccounts: 1,
+    unassignedRealCards: 1,
+    legacySyntheticCards: 1,
+    missingCompanyId: 0,
+    missingLifecycle: 1,
+    missingSource: 1,
+    lifecycle: { active: 1, missing: 1 },
+    companies: 2,
+    certifications: 2,
+    certificationStatus: { approved: 1, pending: 1 },
+    customTemplates: 1,
+    builtInGrantCount: 1,
+  });
+  assert.equal(JSON.stringify(summary).includes('测试员工'), false);
 });
 
 test('ocr stays on Tencent and reports missing keys', () => {
