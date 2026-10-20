@@ -78,7 +78,7 @@ function shell(title, body) {
   return `
     <div class="shell">
       <aside class="rail">
-        <div class="rail-brand"><img src="/brand-logo.png" alt="" width="40" height="40"><div><p class="brand-name">创大产控</p><p class="brand-sub">名片管理平台</p></div></div>
+        <div class="rail-brand"><img src="/brand-logo.png?v=2" alt="" width="48" height="48"><div><p class="brand-name">创大产控</p><p class="brand-sub">名片管理平台</p></div></div>
         <p class="nav-caption">工作区</p>
         <nav aria-label="后台">${nav}</nav>
         <div class="rail-foot"><span class="rail-foot-dot" aria-hidden="true"></span> 管理后台</div>
@@ -123,7 +123,7 @@ function renderLogin(message) {
   app.innerHTML = `
     <main class="login-wrap" id="main">
       <form class="login-panel" data-form="login">
-        <div class="seal" aria-hidden="true">创</div>
+        <div class="seal" aria-hidden="true"><img src="/brand-logo.png?v=2" alt=""></div>
         <p class="eyebrow">CHUANGDA</p>
         <h1>名片管理后台</h1>
         <p class="lede">管理员使用账号登录。员工名片在小程序里通过微信授权进入。</p>
@@ -206,7 +206,7 @@ function cardFace(kind) {
   if (kind === 'wave') {
     return `<div class="pv pv-wave"><img class="pv-wave-bg" src="/wave-front.jpg" alt=""><span class="pv-wv-name">张伟</span><span class="pv-wv-title">客户经理</span><span class="pv-wv-row pv-wv-phone">13800000000</span><span class="pv-wv-row pv-wv-email">zhangwei@chuangda.com</span><span class="pv-wv-row pv-wv-address">上海市浦东新区金桥红枫路288号</span><img class="pv-wv-qr" src="/official-qr.jpg" alt=""></div>`;
   }
-  return `<div class="pv pv-classic"><div class="pv-corp"><span class="pv-corp-cn">${esc(custom && custom.companyName || '上海创大产控高新技术集团有限公司')}</span><span class="pv-corp-en">${esc(custom && custom.companyNameEn || 'SHANGHAI CHUANGDA CHANKONG HI-TECH GROUP CO., LTD.')}</span></div><div class="pv-brand"><img class="pv-seal" src="/brand-logo.png" alt=""><span class="pv-brand-cn">${esc(custom && custom.shortName || '创大产控')}</span><span class="pv-brand-en">${esc(custom && custom.shortNameEn || 'CHUANGDACHANKONG')}</span></div><div class="pv-who"><span class="pv-name">张伟</span><span class="pv-title">客户经理</span></div><span class="pv-mobile">M:13800000000</span><span class="pv-tick"></span><div class="pv-contact"><span>电话/Tel:021-5888 6080</span><span>邮箱/E-mail:zhangwei@chuangda.com</span><span>地址/Add:上海市浦东新区金桥红枫路288号</span></div><img class="pv-qr" src="${esc(custom && custom.qrUrl || '/official-qr.jpg')}" alt=""></div>`;
+  return `<div class="pv pv-classic"><div class="pv-corp"><span class="pv-corp-cn">${esc(custom && custom.companyName || '上海创大产控高新技术集团有限公司')}</span><span class="pv-corp-en">${esc(custom && custom.companyNameEn || 'SHANGHAI CHUANGDA CHANKONG HI-TECH GROUP CO., LTD.')}</span></div><div class="pv-brand"><img class="pv-seal" src="/brand-logo.png?v=2" alt=""><span class="pv-brand-cn">${esc(custom && custom.shortName || '创大产控')}</span><span class="pv-brand-en">${esc(custom && custom.shortNameEn || 'CHUANGDACHANKONG')}</span></div><div class="pv-who"><span class="pv-name">张伟</span><span class="pv-title">客户经理</span></div><span class="pv-mobile">M:13800000000</span><span class="pv-tick"></span><div class="pv-contact"><span>电话/Tel:021-5888 6080</span><span>邮箱/E-mail:zhangwei@chuangda.com</span><span>地址/Add:上海市浦东新区金桥红枫路288号</span></div><img class="pv-qr" src="${esc(custom && custom.qrUrl || '/official-qr.jpg')}" alt=""></div>`;
 }
 
 function templateGallery() {
