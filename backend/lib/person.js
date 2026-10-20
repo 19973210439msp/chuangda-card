@@ -105,6 +105,27 @@ function seedData() {
 
 function toCard(person) {
   const { projectActive, templateLabel } = require('./cards');
+  if (person && person.kind === 'ocr') {
+    return {
+      id: person.id,
+      employeeNo: '',
+      name: person.name || '',
+      company: person.company || '',
+      title: person.title || '',
+      department: '',
+      phone: person.phone || '',
+      wechat: person.wechat || '',
+      email: person.email || '',
+      address: person.address || '',
+      attachments: Array.isArray(person.attachments) ? person.attachments : [],
+      cardTemplate: '',
+      companyId: '',
+      templateLabel: '',
+      activeCardId: '',
+      kind: 'ocr',
+      status: person.status,
+    };
+  }
   const view = projectActive(person);
   return {
     id: view.id,
@@ -118,7 +139,7 @@ function toCard(person) {
     email: view.email || '',
     address: view.address || '',
     attachments: view.attachments || [],
-    cardTemplate: view.cardTemplate || 'classic',
+    cardTemplate: view.cardTemplate || '',
     companyId: view.companyId || '',
     templateLabel: view.templateName || templateLabel(view.cardTemplate),
     activeCardId: view.activeCardId || '',
@@ -129,6 +150,7 @@ function toCard(person) {
 
 function toSelf(person) {
   const { projectActive, presentCard } = require('./cards');
+  if (person && person.kind === 'ocr') return { ...toCard(person), authPhone: '', cards: [] };
   const view = projectActive(person);
   return {
     ...toCard(view),

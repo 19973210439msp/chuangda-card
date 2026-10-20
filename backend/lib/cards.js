@@ -6,9 +6,11 @@ const TEMPLATES = {
   wave: '蓝韵模板',
 };
 
+const CARD_LIFECYCLES = new Set(['draft', 'active', 'archived']);
+
 function templateLabel(template) {
   if (String(template || '').startsWith('tpl-')) return '总部自定义模板';
-  return TEMPLATES[template] || TEMPLATES.classic;
+  return TEMPLATES[template] || '未知模板';
 }
 
 function validTemplate(template) {
@@ -19,10 +21,43 @@ function newCardId() {
   return 'card-' + crypto.randomBytes(4).toString('hex');
 }
 
+function invalidTemplate() {
+  const err = new Error('模板不存在');
+  err.status = 400;
+  err.code = 'VALIDATION_ERROR';
+  return err;
+}
+
+function normalizeCard(card, index, hasDefault) {
+  const source = card || {};
+  const template = validTemplate(source.template) ? source.template : 'classic';
+  return {
+    id: source.id || ('card-' + index),
+    template,
+    templateName: source.templateName || '',
+    isDefault: source.isDefault === true || (index === 0 && !hasDefault),
+    name: source.name || '',
+    company: source.company || '',
+    title: source.title || '',
+    phone: source.phone || '',
+    wechat: source.wechat || '',
+    email: source.email || '',
+    address: source.address || '',
+    companyId: Object.prototype.hasOwnProperty.call(source, 'companyId')
+      ? String(source.companyId || '')
+      : 'default',
+    lifecycle: CARD_LIFECYCLES.has(source.lifecycle) ? source.lifecycle : 'active',
+    source: source.source || 'legacy_unknown',
+    attachments: (Array.isArray(source.attachments) ? source.attachments : [])
+      .filter((item) => !item || item.name !== '微信二维码'),
+  };
+}
+
 function cardFromFields(fields, extra) {
+  if (!validTemplate(extra.template)) throw invalidTemplate();
   return {
     id: extra.id,
-    template: validTemplate(extra.template) ? extra.template : 'classic',
+    template: extra.template,
     templateName: fields.templateName || '',
     isDefault: !!extra.isDefault,
     name: fields.name || '',
@@ -32,42 +67,41 @@ function cardFromFields(fields, extra) {
     wechat: fields.wechat || '',
     email: fields.email || '',
     address: fields.address || '',
-    companyId: Object.prototype.hasOwnProperty.call(fields, 'companyId') ? String(fields.companyId || '') : 'default',
-    attachments: (Array.isArray(fields.attachments) ? fields.attachments : []).filter((item) => !item || item.name !== '微信二维码'),
+    companyId: Object.prototype.hasOwnProperty.call(fields, 'companyId') ? String(fields.companyId || '') : '',
+    lifecycle: CARD_LIFECYCLES.has(extra.lifecycle) ? extra.lifecycle : 'active',
+    source: extra.source || 'legacy_unknown',
+    attachments: (Array.isArray(fields.attachments) ? fields.attachments : [])
+      .filter((item) => !item || item.name !== '微信二维码'),
   };
 }
 
 function ensureCards(person) {
   const source = person || {};
-  let cards = Array.isArray(source.cards) ? source.cards.filter(Boolean) : [];
-  if (!cards.length) {
-    cards = [cardFromFields(source, { id: 'card-default', template: 'classic', isDefault: true })];
-  } else {
-    cards = cards.map((card, index) => cardFromFields(card, {
-      id: card.id || ('card-' + index),
-      template: card.template || 'classic',
-      isDefault: card.isDefault === true || (index === 0 && !cards.some((item) => item && item.isDefault)),
-    }));
-    if (!cards.some((card) => card.isDefault)) cards[0].isDefault = true;
-  }
-  let activeCardId = source.activeCardId;
-  if (!cards.some((card) => card.id === activeCardId)) {
-    const fallback = cards.find((card) => card.isDefault) || cards[0];
-    activeCardId = fallback.id;
-  }
+  const input = Array.isArray(source.cards) ? source.cards.filter(Boolean) : [];
+  const hasDefault = input.some((card) => card && card.isDefault === true);
+  const cards = input.map((card, index) => normalizeCard(card, index, hasDefault));
+  if (cards.length && !cards.some((card) => card.isDefault)) cards[0].isDefault = true;
+  const activeCardId = cards.some((card) => card.id === source.activeCardId) ? source.activeCardId : '';
   return { ...source, cards, activeCardId };
 }
 
-function activeCard(person) {
+function reconcileActiveCard(person) {
   const ready = ensureCards(person);
-  return ready.cards.find((card) => card.id === ready.activeCardId) || ready.cards[0];
+  const activeCards = ready.cards.filter((card) => card.lifecycle === 'active');
+  if (!activeCards.length) return { ...ready, activeCardId: '' };
+  if (activeCards.some((card) => card.id === ready.activeCardId)) return ready;
+  const fallback = activeCards.find((card) => card.isDefault) || activeCards[0];
+  return { ...ready, activeCardId: fallback.id };
 }
 
-function projectActive(person) {
-  const ready = ensureCards(person);
-  const card = activeCard(ready);
+function activeCard(person) {
+  const ready = reconcileActiveCard(person);
+  return ready.cards.find((card) => card.id === ready.activeCardId) || null;
+}
+
+function projectWithCard(person, card) {
   return {
-    ...ready,
+    ...person,
     name: card.name || '',
     company: card.company || '',
     title: card.title || '',
@@ -80,6 +114,27 @@ function projectActive(person) {
     cardTemplate: card.template,
     templateName: card.templateName || '',
     activeCardId: card.id,
+  };
+}
+
+function projectActive(person) {
+  const ready = reconcileActiveCard(person);
+  const card = ready.cards.find((item) => item.id === ready.activeCardId) || null;
+  if (card) return projectWithCard(ready, card);
+  return {
+    ...ready,
+    name: ready.name || '',
+    company: ready.company || '',
+    title: ready.title || '',
+    phone: ready.phone || '',
+    wechat: ready.wechat || '',
+    email: ready.email || '',
+    address: ready.address || '',
+    attachments: Array.isArray(ready.attachments) ? ready.attachments : [],
+    companyId: '',
+    cardTemplate: '',
+    templateName: '',
+    activeCardId: '',
   };
 }
 
@@ -105,17 +160,22 @@ function presentCard(card) {
     email: card.email || '',
     address: card.address || '',
     companyId: card.companyId || '',
+    lifecycle: card.lifecycle || 'active',
+    source: card.source || 'legacy_unknown',
   };
 }
 
 function writeActive(person, fields) {
-  const ready = ensureCards(person);
+  const ready = reconcileActiveCard(person);
+  if (!ready.activeCardId) return projectActive({ ...ready, ...fields });
   const cards = ready.cards.map((card) => {
     if (card.id !== ready.activeCardId) return card;
     return cardFromFields({ ...card, ...fields }, {
       id: card.id,
       template: card.template,
       isDefault: card.isDefault,
+      lifecycle: card.lifecycle,
+      source: card.source,
     });
   });
   return projectActive({ ...ready, cards });
@@ -123,12 +183,16 @@ function writeActive(person, fields) {
 
 function writeDefault(person, fields) {
   const ready = ensureCards(person);
+  if (!ready.cards.length) return projectActive({ ...ready, ...fields });
   const cards = ready.cards.map((card) => {
     if (!card.isDefault) return card;
+    const template = fields.cardTemplate === undefined ? card.template : fields.cardTemplate;
     return cardFromFields({ ...card, ...fields }, {
       id: card.id,
-      template: validTemplate(fields.cardTemplate) ? fields.cardTemplate : 'classic',
+      template,
       isDefault: true,
+      lifecycle: card.lifecycle,
+      source: card.source,
     });
   });
   return projectActive({ ...ready, cards });
@@ -138,20 +202,18 @@ function removeCard(person, cardId) {
   const ready = ensureCards(person);
   const target = ready.cards.find((card) => card.id === cardId);
   if (!target) return null;
-  if (ready.cards.length <= 1) {
-    const err = new Error('至少保留一张名片');
-    err.status = 400;
-    err.code = 'VALIDATION_ERROR';
-    throw err;
-  }
   let cards = ready.cards.filter((card) => card.id !== cardId);
-  if (!cards.some((card) => card.isDefault)) {
+  if (cards.length && !cards.some((card) => card.isDefault)) {
     cards = cards.map((card, index) => ({ ...card, isDefault: index === 0 }));
   }
-  const activeCardId = ready.activeCardId === cardId
-    ? (cards.find((card) => card.isDefault) || cards[0]).id
-    : ready.activeCardId;
-  return projectActive({ ...ready, cards, activeCardId });
+  return projectActive(reconcileActiveCard({ ...ready, cards }));
+}
+
+function archiveCard(person, cardId) {
+  const ready = ensureCards(person);
+  if (!ready.cards.some((card) => card.id === cardId)) return null;
+  const cards = ready.cards.map((card) => card.id === cardId ? { ...card, lifecycle: 'archived' } : card);
+  return projectActive(reconcileActiveCard({ ...ready, cards }));
 }
 
 function assignCardCompany(person, cardId, companyId, companyName) {
@@ -159,14 +221,12 @@ function assignCardCompany(person, cardId, companyId, companyName) {
   if (!ready.cards.some((card) => card.id === cardId)) return null;
   const cards = ready.cards.map((card) => {
     if (card.id !== cardId) return card;
-    return cardFromFields({
-      ...card,
-      companyId,
-      company: companyName || card.company,
-    }, {
+    return cardFromFields({ ...card, companyId, company: companyName || card.company }, {
       id: card.id,
       template: card.template,
       isDefault: card.isDefault,
+      lifecycle: card.lifecycle,
+      source: card.source,
     });
   });
   return projectActive({ ...ready, cards });
@@ -181,27 +241,30 @@ function writeCard(person, cardId, fields) {
       id: card.id,
       template: card.template,
       isDefault: card.isDefault,
+      lifecycle: card.lifecycle,
+      source: card.source,
     });
   });
   return projectActive({ ...ready, cards });
 }
+
 function projectCard(person, cardId) {
   const ready = ensureCards(person);
-  if (!ready.cards.some((card) => card.id === cardId)) return null;
-  return projectActive({ ...ready, activeCardId: cardId });
+  const card = ready.cards.find((item) => item.id === cardId);
+  return card ? projectWithCard(ready, card) : null;
 }
 
 function switchTo(person, cardId) {
   const ready = ensureCards(person);
-  if (!ready.cards.some((card) => card.id === cardId)) return null;
-  return projectActive({ ...ready, activeCardId: cardId });
+  const card = ready.cards.find((item) => item.id === cardId && item.lifecycle === 'active');
+  return card ? projectWithCard({ ...ready, activeCardId: cardId }, card) : null;
 }
 
 function writeCompanyTemplateCard(person, fields) {
-  const hadCards = Array.isArray(person.cards) && person.cards.length > 0;
-  const ready = hadCards ? ensureCards(person) : { ...person, cards: [], activeCardId: '' };
-  const companyId = Object.prototype.hasOwnProperty.call(fields, 'companyId') ? String(fields.companyId || '') : 'default';
-  const template = validTemplate(fields.cardTemplate) ? fields.cardTemplate : 'classic';
+  const ready = ensureCards(person);
+  const companyId = Object.prototype.hasOwnProperty.call(fields, 'companyId') ? String(fields.companyId || '') : '';
+  const template = fields.cardTemplate;
+  if (!validTemplate(template)) throw invalidTemplate();
   const existing = ready.cards.find((card) => card.companyId === companyId && card.template === template);
   if (existing) {
     const cards = ready.cards.map((card) => {
@@ -210,6 +273,8 @@ function writeCompanyTemplateCard(person, fields) {
         id: card.id,
         template,
         isDefault: card.isDefault,
+        lifecycle: 'active',
+        source: card.source,
       });
     });
     return projectActive({ ...ready, cards, activeCardId: existing.id });
@@ -218,50 +283,49 @@ function writeCompanyTemplateCard(person, fields) {
     id: newCardId(),
     template,
     isDefault: ready.cards.length === 0,
+    lifecycle: 'active',
+    source: fields.source || 'company_issued',
   });
-  return projectActive({
-    ...ready,
-    cards: ready.cards.concat(card),
-    activeCardId: card.id,
-  });
+  return projectActive({ ...ready, cards: ready.cards.concat(card), activeCardId: card.id });
 }
 
 function addCard(person, template, options = {}) {
   const ready = ensureCards(person);
-  if (!validTemplate(template)) {
-    const err = new Error('模板不存在');
-    err.status = 400;
-    err.code = 'VALIDATION_ERROR';
-    throw err;
-  }
+  if (!validTemplate(template)) throw invalidTemplate();
   if (ready.cards.length >= 6) {
     const err = new Error('最多保存 6 张名片');
     err.status = 400;
     err.code = 'VALIDATION_ERROR';
     throw err;
   }
-  const source = activeCard(ready);
+  const source = activeCard(ready) || person || {};
+  const companyId = Object.prototype.hasOwnProperty.call(options, 'companyId') ? String(options.companyId || '') : '';
   const card = cardFromFields({
     name: source.name || '',
-    company: source.company || person.company || '',
+    company: source.company || '',
     title: source.title || '',
-    phone: source.phone || '',
+    phone: source.phone || source.authPhone || '',
     email: source.email || '',
     address: source.address || '',
-    companyId: source.companyId || 'default',
     ...options,
-  }, { id: newCardId(), template, isDefault: false });
-  return projectActive({
-    ...ready,
-    cards: ready.cards.concat(card),
-    activeCardId: card.id,
+    companyId,
+  }, {
+    id: newCardId(),
+    template,
+    isDefault: ready.cards.length === 0,
+    lifecycle: 'active',
+    source: options.source || 'employee_created',
   });
+  return projectActive({ ...ready, cards: ready.cards.concat(card), activeCardId: card.id });
 }
 
 module.exports = {
   TEMPLATES,
   templateLabel,
+  validTemplate,
   ensureCards,
+  reconcileActiveCard,
+  activeCard,
   projectActive,
   identityPhone,
   presentCard,
@@ -271,6 +335,7 @@ module.exports = {
   assignCardCompany,
   writeCompanyTemplateCard,
   removeCard,
+  archiveCard,
   switchTo,
   projectCard,
   addCard,
