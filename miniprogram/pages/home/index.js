@@ -1,10 +1,23 @@
 const { request } = require('../../utils/request');
 const { decorateCard, decorateCompany, pageScrollHeight } = require('../../utils/util');
 const { ensureLogin } = require('../../utils/guard');
+const { emptyCardState } = require('../../utils/card-home-state');
 const apiBaseUtil = require('../../utils/api-base');
 
 Page({
-  data: { card: null, company: null, summary: null, hasCard: false, needGuide: false, needPhone: false, flipped: false, error: '', copyLink: '', scrollHeight: 600 },
+  data: {
+    card: null,
+    company: null,
+    summary: null,
+    hasCard: false,
+    emptyState: emptyCardState({}),
+    needGuide: false,
+    needPhone: false,
+    flipped: false,
+    error: '',
+    copyLink: '',
+    scrollHeight: 600,
+  },
   onLoad() {
     this.setData({ scrollHeight: pageScrollHeight() });
   },
@@ -16,11 +29,20 @@ Page({
     Promise.all([
       request({ url: '/api/employee/me' }),
       request({ url: '/api/analytics/summary' }),
-    ]).then(([me, summary]) => {
+      request({ url: '/api/employee/templates' }),
+      request({ url: '/api/employee/certification' }),
+    ]).then(([me, summary, available, certification]) => {
+      const hasCard = !!(me.employee && me.employee.activeCardId);
       this.setData({
         card: decorateCard(me.employee),
         company: decorateCompany(me.templateCompany),
-        hasCard: !!(me.employee && me.employee.activeCardId),
+        hasCard,
+        emptyState: emptyCardState({
+          hasCard,
+          templates: available.items || [],
+          certified: certification.certified || [],
+          pending: certification.pending || [],
+        }),
         summary: (summary.items && summary.items[0]) || {
           interestIndex: 0,
           views: 0,
@@ -51,6 +73,13 @@ Page({
   },
   onCert() {
     wx.navigateTo({ url: '/pages/mine/cert' });
+  },
+  onEmptyAction() {
+    if (this.data.emptyState.kind === 'ready') {
+      this.onStyle();
+      return;
+    }
+    this.onCert();
   },
   onBindPhone() {
     wx.showModal({

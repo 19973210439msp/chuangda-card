@@ -192,6 +192,28 @@
   font-size: 24rpx;
 }
 
+.guide-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 80rpx;
+  margin: 24rpx 0 0;
+  padding: 0 24rpx;
+  border: none;
+  border-radius: 12rpx;
+  color: #ffffff;
+  background: #182850;
+  font-size: 27rpx;
+  font-weight: 600;
+  line-height: 80rpx;
+  box-sizing: border-box;
+}
+
+.guide-action::after {
+  border: none;
+}
+
 .section {
   display: block;
   margin-top: 8rpx;
