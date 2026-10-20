@@ -1,5 +1,6 @@
 const { request } = require('../../utils/request');
 const { decorateCard, decorateCompany, visitorId, pageScrollHeight } = require('../../utils/util');
+const { favoritePayload } = require('../../utils/favorite-flow');
 
 function contactClient() {
   let info = {};
@@ -70,13 +71,17 @@ Page({
     request({
       url: '/api/holder',
       method: 'POST',
-      data: { cardId: this.cardId },
-      redirectOnAuth: false,
+      data: favoritePayload(this.cardId, this.shareCard),
     }).then((data) => {
+      wx.removeStorageSync('pendingCardId');
+      wx.removeStorageSync('pendingShareCard');
       this.kept = true;
       this.setData({ favorited: true, canFavorite: false });
       if (!data.already) wx.showToast({ title: '已收入名片夹', icon: 'success' });
     }).catch((err) => {
+      if (err.statusCode === 401 || err.code === 'ACCOUNT_INACTIVE') return;
+      wx.removeStorageSync('pendingCardId');
+      wx.removeStorageSync('pendingShareCard');
       const message = err.message || '';
       if (message.indexOf('自己') >= 0) {
         this.setData({ canFavorite: false, favorited: false, error: message });
@@ -86,9 +91,10 @@ Page({
     });
   },
   onFavorite() {
+    wx.setStorageSync('pendingCardId', this.cardId);
+    if (this.shareCard) wx.setStorageSync('pendingShareCard', this.shareCard);
+    else wx.removeStorageSync('pendingShareCard');
     if (!wx.getStorageSync('token')) {
-      wx.setStorageSync('pendingCardId', this.cardId);
-      if (this.shareCard) wx.setStorageSync('pendingShareCard', this.shareCard);
       wx.navigateTo({ url: '/pages/login/index' });
       return;
     }

@@ -2,6 +2,7 @@ const { request } = require('../../utils/request');
 const { pageScrollHeight } = require('../../utils/util');
 const accounts = require('../../utils/accounts');
 const { phoneAuthError, phoneCodeFromEvent } = require('../../utils/phone-auth');
+const { favoritePayload, sharedCardPath } = require('../../utils/favorite-flow');
 
 Page({
   data: { wechatSkip: true, loading: false, error: '', scrollHeight: 600 },
@@ -126,18 +127,21 @@ Page({
       wx.switchTab({ url: '/pages/home/index' });
       return;
     }
+    const share = wx.getStorageSync('pendingShareCard');
     request({
       url: '/api/holder',
       method: 'POST',
-      data: { cardId: pending },
+      data: favoritePayload(pending, share),
       redirectOnAuth: false,
-    }).catch(() => null).then(() => {
+    }).then(() => {
       wx.removeStorageSync('pendingCardId');
-      const share = wx.getStorageSync('pendingShareCard');
       wx.removeStorageSync('pendingShareCard');
-      let url = '/pages/client/card?cardId=' + pending + '&collected=1';
-      if (share) url += '&shareCard=' + encodeURIComponent(share);
-      wx.redirectTo({ url });
+      wx.redirectTo({ url: sharedCardPath(pending, share, true) });
+    }).catch((err) => {
+      wx.removeStorageSync('pendingCardId');
+      wx.removeStorageSync('pendingShareCard');
+      wx.showToast({ title: err.message || '收藏失败，请重试', icon: 'none' });
+      wx.redirectTo({ url: sharedCardPath(pending, share, false) });
     });
   },
 });

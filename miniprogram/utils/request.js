@@ -34,7 +34,10 @@ function requestOnce(base, { url, method = 'GET', data, redirectOnAuth = true, t
           wx.reLaunch({ url: '/pages/login/index' });
         }
         const message = res.data && res.data.error && res.data.error.message;
-        reject(new Error(message || '请求失败'));
+        const error = new Error(message || '请求失败');
+        error.code = code || '';
+        error.statusCode = res.statusCode;
+        reject(error);
       },
       fail(err) {
         console.error('fail:', JSON.stringify(err));

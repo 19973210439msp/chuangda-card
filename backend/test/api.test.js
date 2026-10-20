@@ -164,6 +164,11 @@ test('employee card, holder, account and analytics', async () => {
   const selfFav = await api('/api/holder', { method: 'POST', token, body: { cardId: employeeId } });
   assert.equal(selfFav.status, 404);
 
+  const publicSharedCard = await api('/api/cards/emp-1001');
+  assert.equal(publicSharedCard.status, 200);
+  const anonymousFavorite = await api('/api/holder', { method: 'POST', body: { cardId: 'emp-1001' } });
+  assert.equal(anonymousFavorite.status, 401);
+
   const favorite = await api('/api/holder', { method: 'POST', token, body: { cardId: 'emp-1001' } });
   assert.equal(favorite.status, 201);
   assert.equal(favorite.json.item.card.name, '林启明');
