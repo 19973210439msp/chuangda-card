@@ -18,12 +18,8 @@ Page({
     if (!ensureLogin()) return;
     request({ url: '/api/employee/me' }).then((data) => {
       const employee = data.employee || {};
-      const cardId = employee.activeCardId || '';
       accounts.remember(employee);
-      const certRequest = cardId
-        ? request({ url: '/api/employee/certification?cardId=' + encodeURIComponent(cardId) })
-        : Promise.resolve({});
-      return Promise.all([Promise.resolve(employee), certRequest]);
+      return Promise.all([Promise.resolve(employee), request({ url: '/api/employee/certification' })]);
     }).then(([employee, cert]) => {
       const certified = (cert && cert.certified) || [];
       const pending = (cert && cert.pending) || [];

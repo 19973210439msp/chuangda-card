@@ -13,7 +13,6 @@ Page({
     certified: [],
     pending: [],
     companyOpen: false,
-    cardId: '',
     allCompanies: [],
   },
   onLoad() {
@@ -21,26 +20,20 @@ Page({
   },
   onShow() {
     if (!ensureLogin()) return;
-    request({ url: '/api/employee/me' }).then((data) => {
-      const employee = data.employee || {};
-      const cardId = employee.activeCardId || '';
-      return Promise.all([
-        Promise.resolve(cardId),
-        request({ url: '/api/employee/companies' }),
-        cardId ? request({ url: '/api/employee/certification?cardId=' + encodeURIComponent(cardId) }) : Promise.resolve({}),
-      ]);
-    }).then(([cardId, companies, cert]) => {
-      this.showCert(cardId, (companies && companies.items) || [], cert || {});
+    Promise.all([
+      request({ url: '/api/employee/companies' }),
+      request({ url: '/api/employee/certification' }),
+    ]).then(([companies, cert]) => {
+      this.showCert((companies && companies.items) || [], cert || {});
     }).catch((err) => this.setData({ error: err.message }));
   },
-  showCert(cardId, all, cert) {
+  showCert(all, cert) {
     const taken = {};
     (cert.certified || []).concat(cert.pending || []).forEach((item) => {
       if (item && item.companyId) taken[item.companyId] = true;
     });
     const items = (all || []).filter((item) => item && item.id && !taken[item.id]);
     this.setData({
-      cardId,
       allCompanies: all || [],
       companies: items,
       companyNames: items.map((item) => item.name),
@@ -48,7 +41,7 @@ Page({
       certified: cert.certified || [],
       pending: cert.pending || [],
       certCode: '',
-      error: cardId ? '' : '名片还在加载',
+      error: '',
     });
   },
   onOpenCompanies() {
@@ -70,25 +63,20 @@ Page({
     this.setData({ certCode: String(event.detail.value || '').replace(/\s/g, '').slice(0, 12) });
   },
   onApplyCert() {
-    const cardId = this.data.cardId;
-    if (!cardId) {
-      this.setData({ error: '名片还在加载' });
-      return;
-    }
     const code = String(this.data.certCode || '').trim();
     const picked = (this.data.companies || [])[this.data.companyIndex];
     if (!code && !picked) {
-      this.setData({ error: '请选择子公司或填写认证码' });
+      this.setData({ error: '请选择企业或填写认证码' });
       return;
     }
     request({
       url: '/api/employee/certification',
       method: 'POST',
-      data: { cardId, companyId: code ? '' : picked.id, code },
+      data: { companyId: code ? '' : picked.id, code },
     }).then((result) => request({
-      url: '/api/employee/certification?cardId=' + encodeURIComponent(cardId),
+      url: '/api/employee/certification',
     }).then((cert) => ({ cert, alreadyPending: !!(result && result.alreadyPending) }))).then(({ cert, alreadyPending }) => {
-      this.showCert(cardId, this.data.allCompanies || [], cert || {});
+      this.showCert(this.data.allCompanies || [], cert || {});
       wx.showToast({ title: alreadyPending ? '管理员正在审核中' : '已提交认证', icon: 'none' });
     }).catch((err) => this.setData({ error: err.message }));
   },

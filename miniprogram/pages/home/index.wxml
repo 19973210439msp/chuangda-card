@@ -9,7 +9,7 @@
         <text class="page-en">DIGITAL BUSINESS CARD</text>
       </view>
     </view>
-    <view class="card-wrap">
+    <view class="card-wrap" wx:if="{{hasCard}}">
       <card-view card="{{card}}" company="{{company}}" flipped="{{flipped}}"></card-view>
       <text class="flip-hint" bindtap="onFlip">点击名片翻面 · TAP TO FLIP</text>
       <view class="lite-wrap">
@@ -34,6 +34,10 @@
         </view>
         </view>
       </view>
+    </view>
+    <view class="guide" wx:else bindtap="onCert">
+      <text class="guide-title">还没有可用名片</text>
+      <text class="guide-desc">请先完成企业认证。认证通过且企业获得模板后，即可创建名片。</text>
     </view>
     <view class="error" wx:if="{{error}}">{{error}}</view>
     <view class="guide" wx:if="{{needPhone}}" bindtap="onBindPhone">

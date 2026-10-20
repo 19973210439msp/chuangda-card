@@ -3,7 +3,7 @@
   <view class="sub-body">
     <view class="error" wx:if="{{error}}">{{error}}</view>
     <view class="card-block">
-      <text class="hint">总公司无需认证。一张名片可以申请多家子公司，通过后请到编辑名片里自行选择，认证不会自动改掉名片上的公司。</text>
+      <text class="hint">所有企业（包括总公司）都需要先认证。认证通过且企业已获得模板后，才能创建对应企业名片。</text>
       <block wx:if="{{certified.length}}">
         <text class="label">已认证</text>
         <text class="company-line" wx:for="{{certified}}" wx:key="companyId">{{item.companyName}}</text>

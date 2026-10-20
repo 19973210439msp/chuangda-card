@@ -10,7 +10,7 @@ Page({
     company: null,
     activeCardId: '',
     templates: [],
-    draftTemplate: 'classic',
+    draftTemplate: '',
     draftCompanyId: '',
     creating: false,
     error: '',
@@ -55,7 +55,7 @@ Page({
           },
         };
       });
-      const cards = (employee.cards || []).map((card) => ({
+      const cards = (employee.cards || []).filter((card) => card.lifecycle !== 'archived').map((card) => ({
         ...card,
         brand: decorateCompany((me.cardCompanies || {})[card.id] || me.templateCompany),
         preview: {
@@ -75,8 +75,8 @@ Page({
         company: brand,
         activeCardId: employee.activeCardId || '',
         templates,
-        draftTemplate: 'classic',
-        draftCompanyId: '',
+        draftTemplate: templates[0] ? templates[0].id : '',
+        draftCompanyId: templates[0] ? templates[0].companyId : '',
         error: '',
       });
     }).catch((err) => this.setData({ error: err.message }));
@@ -100,7 +100,7 @@ Page({
     if (!cardId) return;
     wx.showModal({
       title: '删除这张名片',
-      content: '删除后不能恢复。至少会保留一张名片。',
+      content: '删除后不能恢复。删除最后一张后，账号将暂时没有可用名片。',
       confirmText: '删除',
       confirmColor: '#c82423',
       success: (res) => {
@@ -119,6 +119,10 @@ Page({
     });
   },
   onCreate() {
+    if (!this.data.draftTemplate || !this.data.draftCompanyId) {
+      this.setData({ error: '请先完成企业认证，等待企业获得名片模板' });
+      return;
+    }
     this.setData({ creating: true, error: '' });
     request({
       url: '/api/employee/cards',
@@ -127,5 +131,8 @@ Page({
     }).then(() => {
       wx.redirectTo({ url: '/pages/home/edit' });
     }).catch((err) => this.setData({ creating: false, error: err.message }));
+  },
+  onCert() {
+    wx.navigateTo({ url: '/pages/mine/cert' });
   },
 });

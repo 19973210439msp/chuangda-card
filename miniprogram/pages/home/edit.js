@@ -28,21 +28,20 @@ Page({
     request({ url: '/api/employee/me' }).then((data) => {
       const form = Object.assign({ attachments: [] }, data.employee);
       const cardId = form.activeCardId || '';
+      if (!cardId) throw new Error('请先完成企业认证并创建名片');
       return Promise.all([
         Promise.resolve(form),
-        request({ url: '/api/company' }),
-        cardId ? request({ url: '/api/employee/certification?cardId=' + encodeURIComponent(cardId) }) : Promise.resolve({}),
+        request({ url: '/api/employee/certification' }),
       ]);
-    }).then(([form, company, cert]) => {
-      const hqName = (company.company && company.company.name) || '总公司';
-      const choices = [{ id: '', name: hqName }];
+    }).then(([form, cert]) => {
+      const choices = [];
       ((cert && cert.certified) || []).forEach((item) => {
-        if (item && item.companyId) choices.push({ id: item.companyId, name: item.companyName || '已认证子公司' });
+        if (item && item.companyId) choices.push({ id: item.companyId, name: item.companyName || '已认证企业' });
       });
       if (form.companyId && !choices.some((item) => item.id === form.companyId)) {
         choices.push({ id: form.companyId, name: form.company || '当前公司' });
       }
-      let companyIndex = choices.findIndex((item) => item.id === (form.companyId || ''));
+      let companyIndex = choices.findIndex((item) => item.id === form.companyId);
       if (companyIndex < 0) companyIndex = 0;
       this.setData({
         form,
@@ -108,8 +107,6 @@ Page({
       name: form.name || '',
       company: form.company || '',
       companyId: form.companyId || '',
-      name: form.name || '',
-      company: form.company || '',
       title: form.title || '',
       phone: form.phone || '',
       email: form.email || '',

@@ -9,7 +9,7 @@
           <text class="tpl">{{item.templateLabel}}{{item.isDefault ? ' · 导入默认' : ''}}</text>
           <view class="head-actions">
             <text class="current" wx:if="{{item.id === activeCardId}}">当前</text>
-            <text class="remove" wx:if="{{cards.length > 1}}" data-id="{{item.id}}" catchtap="onDelete">删除</text>
+            <text class="remove" data-id="{{item.id}}" catchtap="onDelete">删除</text>
           </view>
         </view>
         <card-view card="{{item.preview}}" company="{{item.brand}}"></card-view>
@@ -19,7 +19,7 @@
     </block>
     <view class="create" wx:else>
       <text class="label">选择名片样式</text>
-      <text class="desc">完成子公司认证后，这里会显示该企业分配的模板。选好样式后可创建并填写名片。</text>
+      <text class="desc">完成企业认证后，这里会显示该企业获得的模板。选好样式后可创建并填写名片。</text>
       <view class="style-item {{draftTemplate === item.id && draftCompanyId === item.companyId ? 'on' : ''}}" wx:for="{{templates}}" wx:key="key" data-template="{{item.id}}" data-company="{{item.companyId}}" bindtap="onTemplate">
         <view class="card-head">
           <view><text class="tpl">{{item.label}}</text><text class="template-company" wx:if="{{item.companyId}}">{{item.companyName}}</text></view>
@@ -27,7 +27,11 @@
         </view>
         <card-view card="{{item.preview}}" company="{{item.brand}}"></card-view>
       </view>
-      <button class="primary" bindtap="onCreate" loading="{{creating}}">创建并填写</button>
+      <view wx:if="{{!templates.length}}">
+        <text class="desc">暂无可用模板。请先认证企业；如果已经认证，请联系管理员为企业发放模板。</text>
+        <button class="primary" bindtap="onCert">去企业认证</button>
+      </view>
+      <button class="primary" wx:else bindtap="onCreate" loading="{{creating}}">创建并填写</button>
     </view>
   </view>
 </scroll-view>

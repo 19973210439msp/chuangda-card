@@ -4,7 +4,7 @@ const { ensureLogin } = require('../../utils/guard');
 const apiBaseUtil = require('../../utils/api-base');
 
 Page({
-  data: { card: null, company: null, summary: null, needGuide: false, needPhone: false, flipped: false, error: '', copyLink: '', scrollHeight: 600 },
+  data: { card: null, company: null, summary: null, hasCard: false, needGuide: false, needPhone: false, flipped: false, error: '', copyLink: '', scrollHeight: 600 },
   onLoad() {
     this.setData({ scrollHeight: pageScrollHeight() });
   },
@@ -15,19 +15,19 @@ Page({
   load() {
     Promise.all([
       request({ url: '/api/employee/me' }),
-      request({ url: '/api/company' }),
       request({ url: '/api/analytics/summary' }),
-    ]).then(([me, company, summary]) => {
+    ]).then(([me, summary]) => {
       this.setData({
         card: decorateCard(me.employee),
-        company: decorateCompany(me.templateCompany || company.company),
+        company: decorateCompany(me.templateCompany),
+        hasCard: !!(me.employee && me.employee.activeCardId),
         summary: (summary.items && summary.items[0]) || {
           interestIndex: 0,
           views: 0,
           visitors: 0,
           avgDurationSec: 0,
         },
-        needGuide: !(me.employee && me.employee.name),
+        needGuide: !!(me.employee && me.employee.activeCardId && !me.employee.name),
         needPhone: !(me.employee && me.employee.phone),
         error: '',
       });
@@ -43,7 +43,14 @@ Page({
     wx.navigateTo({ url: '/pages/home/switch?mode=style' });
   },
   onEdit() {
+    if (!this.data.hasCard) {
+      wx.navigateTo({ url: '/pages/home/switch?mode=style' });
+      return;
+    }
     wx.navigateTo({ url: '/pages/home/edit' });
+  },
+  onCert() {
+    wx.navigateTo({ url: '/pages/mine/cert' });
   },
   onBindPhone() {
     wx.showModal({
@@ -65,8 +72,8 @@ Page({
   },
   onCopy() {
     const card = this.data.card;
-    if (!card || !card.id) {
-      wx.showToast({ title: '名片还在加载', icon: 'none' });
+    if (!this.data.hasCard || !card || !card.id) {
+      wx.showToast({ title: '暂无可用名片', icon: 'none' });
       return;
     }
     const link = apiBaseUtil.current() + '/card.html?cardId=' + card.id
@@ -83,6 +90,7 @@ Page({
   onCopyHold() {},
   onShareAppMessage() {
     const card = this.data.card || {};
+    if (!this.data.hasCard) return { title: '创大产控', path: '/pages/home/index' };
     return {
       title: '这是我的数字名片，望惠存',
       path: '/pages/client/card?cardId=' + card.id + (card.activeCardId ? '&shareCard=' + card.activeCardId : ''),

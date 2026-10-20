@@ -184,28 +184,22 @@ function defaultCardFields(item) {
 }
 
 function templateOptions() {
-  const builtins = [
-    ['classic', '创大产控模板'],
-    ['horizon', '晴空模板'],
-    ['wave', '蓝韵模板'],
-  ];
-  const custom = (state.templates || [])
-    .filter((item) => !builtins.some(([id]) => id === item.id))
-    .map((item) => [item.id, item.name]);
-  return builtins.concat(custom);
+  return (state.templates || []).map((item) => [item.id, item.name]);
 }
 
 function cardTemplateId(value) {
-  return templateOptions().some(([id]) => id === value) ? value : 'classic';
+  const options = templateOptions();
+  return options.some(([id]) => id === value) ? value : (options[0] ? options[0][0] : '');
 }
 
 function templateName(id) {
   const found = templateOptions().find(([itemId]) => itemId === id);
-  return found ? found[1] : '创大产控模板';
+  return found ? found[1] : '暂无可用模板';
 }
 
 function templateChooser(name, selected) {
   const current = cardTemplateId(selected);
+  if (!current) return '<p class="banner" role="status">当前企业没有可用模板，请联系总部管理员发放。</p><input type="hidden" name="' + name + '" value="">';
   return `<div class="tpl-chooser">
     <button class="btn secondary" type="button" data-action="open-templates" data-field="${name}">选择名片模板</button>
     <span class="tpl-current">当前：<b data-template-label="${name}">${templateName(current)}</b></span>
@@ -238,6 +232,7 @@ function templateGallery() {
 }
 
 function cardsHtml() {
+  const noTemplates = templateOptions().length === 0;
   const rows = state.employees.filter((item) => item.status !== 'closed').flatMap((item) => {
     const cards = item.cards || [];
     return (cards.length ? cards : [{}]).map((card, index) => {
@@ -285,8 +280,9 @@ function cardsHtml() {
         <input id="q" name="q" value="${esc(state.query)}" placeholder="搜索所有名片的姓名、手机、邮箱、公司">
         <button class="btn secondary" type="submit">搜索</button>
       </form>
-      <button class="btn" type="button" data-action="create">新建名片</button>
+      <button class="btn" type="button" data-action="create" ${noTemplates ? 'disabled title="当前企业没有可用模板"' : ''}>新建名片</button>
     </div>
+    ${noTemplates ? '<p class="banner" role="status">当前企业没有可用模板，请联系总部管理员发放后再新建或导入名片。</p>' : ''}
     <div class="panel table-wrap">
       <p class="lede">共 ${state.employees.filter((item) => item.status !== 'closed').length} 个员工、${state.employees.filter((item) => item.status !== 'closed').reduce((count, item) => count + (item.cards || []).length, 0)} 张名片。每张名片单独显示，可直接编辑。</p>
       <table class="cards-table">
@@ -313,7 +309,7 @@ function importHtml() {
     <form class="panel" data-form="batch">
       <h3>批量导入</h3>
       <p class="lede">可粘贴表格，或选择 xlsx、xls、csv、docx 文件。Word 请把内容放在表格里，第一行写表头。表头为：姓名、职位、手机号、邮箱、公司、地址。手机号必填。这一批名片使用选中的模板。同一公司、同一模板、同一手机号会更新原名片；换一个模板会另外新建一张。</p>
-      ${templateChooser('cardTemplate', 'classic')}
+      ${templateChooser('cardTemplate', '')}
       <label for="batch">导入内容</label>
       <textarea id="batch" name="list" placeholder="姓名,职位,手机号,邮箱,二维码,公司,地址"></textarea>
       <div class="file-pick">
@@ -487,11 +483,11 @@ function templatesHtml() {
   const company = state.company || {};
   const isHq = !state.admin || state.admin.scope !== 'company';
   const editing = (state.templates || []).find((item) => item.id === state.editingTemplate) || null;
+  const editingBuiltIn = !!(editing && editing.builtIn);
   const preview = (state.templates || []).find((item) => item.id === state.previewTemplate) || null;
-  const companyOptions = (state.companies || []).filter((item) => item.id !== 'default');
-  const assignmentNames = (item) => item.id === 'classic'
-    ? ['所有子公司均可使用']
-    : (item.companyIds || []).map((id) => companyOptions.find((companyItem) => companyItem.id === id)?.name || id);
+  const companyOptions = state.companies || [];
+  const assignmentNames = (item) => (item.companyIds || [])
+    .map((id) => companyOptions.find((companyItem) => companyItem.id === id)?.name || id);
   const rows = (state.templates || []).map((item) => `
     <button class="template-row" type="button" data-action="preview-template" data-id="${esc(item.id)}" aria-label="查看${esc(item.name)}模板">
       <span class="template-row-mark" aria-hidden="true">创</span>
@@ -499,30 +495,30 @@ function templatesHtml() {
       <span class="template-row-view">查看模板图 <span aria-hidden="true">›</span></span>
     </button>`).join('');
   return shell('模板管理', `
-    <p class="lede">${isHq ? '点击模板查看名片图和已分配的子公司。' : '这里只显示创大产控模板和总部下发给本公司的模板；可移除本公司的模板使用权。'}</p>
+    <p class="lede">${isHq ? '点击模板查看名片图和已分配的企业。' : '这里只显示总部明确发放给本公司的模板。模板授权由总部管理员统一管理。'}</p>
     ${isHq ? `<details class="panel template-builder" ${editing ? 'open' : ''}>
       <summary><strong>${editing ? '修改名片模板：' + esc(editing.name) : '＋ 创建名片模板'}</strong><span>基于创大产控模板，设置公司文案、二维码与使用范围</span></summary>
       <form data-form="template" enctype="multipart/form-data">
       <input type="hidden" name="templateId" value="${esc(editing && editing.id || '')}">
-      <div class="grid-2">
+      ${editingBuiltIn ? '<p class="lede">内置模板的样式和品牌内容保持固定，这里只调整企业使用权限。</p>' : `<div class="grid-2">
         <div>${field('tpl-name', '模板名称', editing && editing.name || '')}</div>
         <div>${field('companyName', '左上角公司名称', editing && editing.companyName || company.name)}</div>
         <div>${field('companyNameEn', '左上角公司英文名', editing && editing.companyNameEn || company.nameEn)}</div>
         <div>${field('shortName', 'Logo 下方公司简称', editing && editing.shortName || company.shortName)}</div>
         <div>${field('shortNameEn', 'Logo 下方英文简称', editing && editing.shortNameEn || company.brandEn)}</div>
         <div><label for="qr-file">右下角公众号二维码</label><input id="qr-file" name="qrFile" type="file" accept="image/png,image/jpeg,image/webp"><p class="lede">${editing && editing.qrUrl ? '当前已上传；不选择文件会保留原二维码。' : 'PNG、JPG 或 WebP，最大 8 MB'}</p></div>
-      </div>
-      <fieldset class="template-assignees"><legend>分配给子公司</legend>
-        <p class="template-assignee-help">勾选后，该子公司的管理员可使用此模板；企业认证通过的员工也可在小程序选择。</p>
+      </div>`}
+      <fieldset class="template-assignees"><legend>分配给企业</legend>
+        <p class="template-assignee-help">勾选后，该企业管理员可使用此模板；认证通过的员工也可在小程序选择。总公司员工同样需要认证。</p>
         <div class="template-assignee-grid">${companyOptions.map((item) => `<label class="template-assignee-option"><input type="checkbox" name="companyIds" value="${esc(item.id)}" ${(editing && editing.companyIds || []).includes(item.id) ? 'checked' : ''}><span><strong>${esc(item.shortName || item.name)}</strong><small>${esc(item.name)}</small></span></label>`).join('') || '<p class="lede">请先创建子公司，再分配模板。</p>'}</div>
       </fieldset>
-      <div class="template-form-actions"><button class="btn" type="submit">${editing ? '保存模板' : '创建名片模板'}</button>
+      <div class="template-form-actions"><button class="btn" type="submit">${editingBuiltIn ? '保存授权' : (editing ? '保存模板' : '创建名片模板')}</button>
       ${editing ? '<button class="btn secondary" type="button" data-action="cancel-template">取消修改</button>' : ''}</div>
       </form>
     </details>` : ''}
     <div class="panel template-index"><h3>模板 <span class="template-count">${(state.templates || []).length} 款</span></h3><div class="template-list">${rows}</div></div>
     <dialog id="template-preview" class="template-preview" aria-label="模板预览">
-      ${preview ? `<div class="template-preview-head"><div><small>名片模板</small><h3>${esc(preview.name)}</h3></div><button class="btn secondary small" type="button" data-action="close-template-preview">关闭</button></div>${cardFace(preview.id)}<div class="template-preview-assignments"><strong>分配公司</strong><div>${(assignmentNames(preview).length ? assignmentNames(preview) : ['尚未分配子公司']).map((name) => `<span class="template-assignment-chip">${esc(name)}</span>`).join('')}</div></div><div class="template-preview-actions">${isHq && preview.id !== 'classic' ? `<button class="btn" type="button" data-action="edit-template" data-id="${esc(preview.id)}">修改模板与分配</button>` : ''}${!isHq && preview.id !== 'classic' ? `<button class="btn danger" type="button" data-action="remove-template-assignment" data-id="${esc(preview.id)}">移除本公司模板</button>` : ''}</div>` : ''}
+      ${preview ? `<div class="template-preview-head"><div><small>名片模板</small><h3>${esc(preview.name)}</h3></div><button class="btn secondary small" type="button" data-action="close-template-preview">关闭</button></div>${cardFace(preview.id)}<div class="template-preview-assignments"><strong>分配企业</strong><div>${(assignmentNames(preview).length ? assignmentNames(preview) : ['尚未分配企业']).map((name) => `<span class="template-assignment-chip">${esc(name)}</span>`).join('')}</div></div><div class="template-preview-actions">${isHq ? `<button class="btn" type="button" data-action="edit-template" data-id="${esc(preview.id)}">修改模板与分配</button>` : ''}</div>` : ''}
     </dialog>`);
 }
 
@@ -799,15 +795,17 @@ document.addEventListener('submit', async (event) => {
       const fileInput = form.querySelector('#batch-file');
       const file = fileInput && fileInput.files && fileInput.files[0];
       const lowerName = file ? (file.name || '').toLowerCase() : '';
+      const cardTemplate = formData(form).cardTemplate || '';
+      if (!cardTemplate) throw new Error('当前企业没有可用模板，请联系总部管理员发放');
       let result;
       if (file && !/\.(csv|txt|tsv)$/.test(lowerName)) {
         const body = new FormData();
         body.append('file', file);
-        body.append('cardTemplate', formData(form).cardTemplate || 'classic');
+        body.append('cardTemplate', cardTemplate);
         result = await api('/api/employees/import-file', { method: 'POST', form: body });
       } else {
         const list = parseImportTable(formData(form).list);
-        result = await api('/api/employees/batch', { method: 'POST', body: { list, cardTemplate: formData(form).cardTemplate || 'classic' } });
+        result = await api('/api/employees/batch', { method: 'POST', body: { list, cardTemplate } });
       }
       state.importIssues = result.rejected || [];
       const failed = state.importIssues.length;
@@ -834,7 +832,9 @@ document.addEventListener('submit', async (event) => {
     }
     if (kind === 'template') {
       const fields = formData(form);
-      const qrFile = form.querySelector('#qr-file').files[0];
+      const currentTemplate = (state.templates || []).find((item) => item.id === fields.templateId);
+      const qrInput = form.querySelector('#qr-file');
+      const qrFile = qrInput && qrInput.files[0];
       let qrUrl = (state.templates || []).find((item) => item.id === fields.templateId)?.qrUrl || '';
       if (qrFile) {
         const upload = new FormData();
@@ -854,7 +854,9 @@ document.addEventListener('submit', async (event) => {
         },
       });
       state.editingTemplate = '';
-      showNotice(fields.templateId ? '模板已更新' : '模板已创建并分配');
+      showNotice(currentTemplate && currentTemplate.builtIn
+        ? '模板授权已更新'
+        : (fields.templateId ? '模板已更新' : '模板已创建并分配'));
       await loadView('templates');
       return;
     }
@@ -966,7 +968,16 @@ document.addEventListener('click', async (event) => {
       return;
     }
     if (action === 'create') {
-      state.editing = { status: 'active', cardTemplate: 'classic', company: state.company ? state.company.name : '创大产控集团' };
+      const initialTemplate = cardTemplateId('');
+      if (!initialTemplate) {
+        showNotice('当前企业没有可用模板，请联系总部管理员发放');
+        return;
+      }
+      state.editing = {
+        status: 'active',
+        cardTemplate: initialTemplate,
+        company: state.company ? state.company.name : '创大产控集团',
+      };
       paint();
       return;
     }
@@ -991,7 +1002,7 @@ document.addEventListener('click', async (event) => {
     }
     if (action === 'delete-card') {
       const cardId = event.target.getAttribute('data-card');
-      if (!window.confirm('确定删除这张名片？该员工至少会保留一张名片。')) return;
+      if (!window.confirm('确定删除这张名片？删除最后一张后，该账号将暂时没有可用名片。')) return;
       const wasEditing = !!state.editing;
       const saved = await api('/api/employees/' + id + '/cards/' + encodeURIComponent(cardId), { method: 'DELETE' });
       showNotice('已删除该名片');
