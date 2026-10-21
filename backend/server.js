@@ -38,6 +38,7 @@ const {
 } = require('./lib/access');
 const { clientIp, assertLoginAllowed, recordLoginFailure, recordLoginSuccess } = require('./lib/loginLock');
 const { applyCors } = require('./lib/cors');
+const { validatedFileType } = require('./lib/fileType');
 
 let store;
 try {
@@ -62,6 +63,7 @@ const uploadRoot = config.uploadDir();
 
 app.disable('x-powered-by');
 app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   const decision = applyCors(req, res);
   if (!decision.allow) {
     return res.status(403).json({ error: { code: 'ORIGIN_FORBIDDEN', message: '只允许通过指定域名访问' } });
@@ -186,7 +188,7 @@ async function assertEmployeeNoFree(employeeNo, exceptId) {
   if (found && found.id !== exceptId) throw httpError(409, 'EMPLOYEE_EXISTS', '工号已存在：' + employeeNo);
 }
 
-async function upsertImported(draft) {
+async function upsertImported(draft, options = {}) {
   const companyId = String(draft.companyId || '');
   const cardTemplate = String(draft.cardTemplate || '');
   if (!companyId) throw httpError(400, 'VALIDATION_ERROR', '创建企业名片必须指定企业');
@@ -216,7 +218,7 @@ async function upsertImported(draft) {
     next.id = target.id;
     next.openid = target.openid;
     next.createdAt = target.createdAt;
-    const saved = await store.updatePerson(target.id, writeCompanyTemplateCard(next, {
+    const cardFields = {
       name: next.name,
       company: next.company,
       title: next.title,
@@ -227,7 +229,11 @@ async function upsertImported(draft) {
       companyId,
       cardTemplate,
       templateName: draft.templateName || '',
-    }));
+    };
+    const withCard = options.createNewCard
+      ? addCard(next, cardTemplate, { ...cardFields, source: 'company_issued' })
+      : writeCompanyTemplateCard(next, cardFields);
+    const saved = await store.updatePerson(target.id, withCard);
     await ensureImportedCertification(saved, companyId);
     return { employee: saved, merged: true };
   }
@@ -548,15 +554,20 @@ app.get('/api/me', asyncRoute(async (req, res) => {
 }));
 
 app.get('/api/company', asyncRoute(async (req, res) => {
-  const id = text(req.query.id, 40) || 'default';
-  let company = await store.getCompany(id);
+  const requested = text(req.query.id, 40);
   const isAdmin = req.auth && req.auth.role === 'admin';
+  const admin = isAdmin ? adminOf(req) : null;
+  if (admin && admin.scope === 'company' && requested && requested !== admin.companyId) {
+    throw httpError(403, 'FORBIDDEN', '只能查看本公司的资料');
+  }
+  const id = admin && admin.scope === 'company' ? admin.companyId : (requested || 'default');
+  let company = await store.getCompany(id);
   if (company && isAdmin && !company.certCode) {
     const items = await companiesWithCodes();
     company = items.find((item) => item.id === id) || company;
   }
   const visible = isAdmin
-    ? (adminOf(req).scope === 'hq' || !company ? company : (({ cardTemplates, ...rest }) => rest)(company))
+    ? (admin.scope === 'hq' || !company ? company : (({ cardTemplates, ...rest }) => rest)(company))
     : hideCertCode(company);
   res.json({ company: visible });
 }));
@@ -678,7 +689,7 @@ app.post('/api/employees', asyncRoute(async (req, res) => {
   draft.cardTemplate = selectedTemplate.id;
   draft.templateName = selectedTemplate.name;
   assertStaffIdentity(draft);
-  const result = await upsertImported(draft);
+  const result = await upsertImported(draft, { createNewCard: true });
   res.status(result.merged ? 200 : 201).json({
     employee: employeeForAdmin(result.employee, admin),
     merged: result.merged,
@@ -756,16 +767,18 @@ app.post('/api/employees/import-file', importUpload.single('file'), asyncRoute(a
   requireAdmin(req);
   if (!req.file) throw httpError(400, 'VALIDATION_ERROR', '请选择表格文件');
   const ext = path.extname(req.file.originalname || '').toLowerCase();
-  const allowed = ['.xlsx', '.xls', '.xlsm', '.xlsb', '.csv', '.txt', '.tsv', '.ods', '.docx'];
+  const allowed = ['.xlsx', '.xlsm', '.csv', '.txt', '.tsv', '.docx'];
   if (ext === '.doc') {
     throw httpError(400, 'VALIDATION_ERROR', '旧版 Word 请另存为 .docx 后再导入');
   }
   if (ext && !allowed.includes(ext)) {
-    throw httpError(400, 'VALIDATION_ERROR', '请上传 xlsx、xls、csv、docx 或其他表格文件');
+    throw httpError(400, 'VALIDATION_ERROR', '请上传 xlsx、xlsm、csv、tsv 或 docx 文件');
   }
   let rows = [];
   try {
-    rows = ext === '.docx' ? await rowsFromDocx(req.file.buffer) : rowsFromSpreadsheet(req.file.buffer);
+    rows = ext === '.docx'
+      ? await rowsFromDocx(req.file.buffer)
+      : await rowsFromSpreadsheet(req.file.buffer, ext);
   } catch (err) {
     throw httpError(400, 'VALIDATION_ERROR', err.code && err.message ? err.message : '无法识别这个文件');
   }
@@ -841,6 +854,9 @@ app.put('/api/employees/:id', asyncRoute(async (req, res) => {
   const targetCard = ready.cards.find((card) => card.id === cardId) || ready.cards.find((card) => card.isDefault);
   const touchesCard = ['name', 'company', 'title', 'phone', 'wechat', 'email', 'address']
     .some((key) => body[key] !== undefined);
+  if (touchesCard && !targetCard) {
+    throw httpError(409, 'NO_ACTIVE_CARD', '该员工没有可编辑名片，请先创建名片');
+  }
   if (touchesCard && targetCard && targetCard.lifecycle !== 'active') {
     throw httpError(409, 'CARD_ARCHIVED', '已归档名片不能修改');
   }
@@ -1404,14 +1420,13 @@ app.post('/api/upload', upload.single('file'), asyncRoute(async (req, res) => {
   requireUser(req);
   if (req.auth.role === 'employee') requireEmployee(req);
   if (!req.file) throw httpError(400, 'VALIDATION_ERROR', '请选择文件');
-  const ext = path.extname(req.file.originalname || '').toLowerCase();
-  const allowed = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.pdf'];
-  const safeExt = allowed.includes(ext) ? ext : '';
-  const filename = Date.now().toString(36) + '-' + crypto.randomBytes(4).toString('hex') + safeExt;
+  const fileType = validatedFileType(req.file.originalname, req.file.buffer);
+  if (!fileType) throw httpError(400, 'UNSUPPORTED_FILE_TYPE', '文件内容与扩展名不匹配或格式不受支持');
+  const filename = Date.now().toString(36) + '-' + crypto.randomBytes(4).toString('hex') + fileType.ext;
   if (config.storageDriver() === 'pg-oss') {
     const owner = String(req.auth.userId || 'admin').replace(/[^a-zA-Z0-9_-]/g, '');
     const key = 'uploads/' + owner + '/' + filename;
-    const url = await store.putPublicObject(key, req.file.buffer, req.file.mimetype);
+    const url = await store.putPublicObject(key, req.file.buffer, fileType.contentType);
     const absoluteUrl = /^https?:\/\//.test(url) ? url : config.publicBase(req) + url;
     res.status(201).json({ url, absoluteUrl, name: req.file.originalname || filename });
     return;
@@ -1429,6 +1444,7 @@ app.get('/api/files/*', asyncRoute(async (req, res) => {
   }
   const file = await store.getObject(key);
   res.setHeader('Content-Type', file.contentType);
+  if (file.contentType === 'application/pdf') res.setHeader('Content-Disposition', 'attachment');
   res.setHeader('Cache-Control', 'private, max-age=300');
   res.send(file.content);
 }));
@@ -1470,7 +1486,7 @@ app.use((err, req, res, next) => {
     err.message = '文件不能超过 8MB';
   }
   const status = err.status || 500;
-  if (!err.status || status >= 500 && !['OCR_NOT_CONFIGURED', 'WECHAT_NOT_CONFIGURED', 'SMS_NOT_CONFIGURED', 'EMAIL_NOT_CONFIGURED'].includes(err.code)) {
+  if (!err.status || status >= 500 && !['OCR_NOT_CONFIGURED', 'WECHAT_NOT_CONFIGURED', 'SMS_NOT_CONFIGURED'].includes(err.code)) {
     console.error(err);
   }
   if (res.headersSent) return next(err);

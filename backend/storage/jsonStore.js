@@ -182,6 +182,7 @@ const store = {
       data.views = data.views.filter((view) => view.cardId !== id);
       data.sessions = data.sessions.filter((session) => session.userId !== id);
       data.codes = data.codes.filter((row) => row.userId !== id);
+      data.accountLinks = (data.accountLinks || []).filter((row) => row.personId !== id);
       data.certifications = (data.certifications || []).filter((row) => row.personId !== id);
       return {
         ok: data.people.length !== before,
@@ -427,16 +428,26 @@ const store = {
       return row;
     });
   },
-  async findValidCode({ userId, channel, target, codeHash, now }) {
+  async findActiveCode({ userId, channel, target, now }) {
     const data = await snapshot();
-    return data.codes.find((row) => (
-      row.userId === userId
-      && row.channel === channel
-      && row.target === target
-      && row.codeHash === codeHash
-      && !row.used
-      && row.expiresAt > now
-    )) || null;
+    return data.codes
+      .filter((row) => (
+        row.userId === userId
+        && row.channel === channel
+        && row.target === target
+        && !row.used
+        && row.expiresAt > now
+      ))
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0] || null;
+  },
+  async recordCodeFailure(id, maxAttempts) {
+    return mutate((data) => {
+      const row = data.codes.find((item) => item.id === id);
+      if (!row || row.used) return row || null;
+      row.failedAttempts = (Number(row.failedAttempts) || 0) + 1;
+      if (row.failedAttempts >= maxAttempts) row.used = true;
+      return row;
+    });
   },
   async markCodeUsed(id) {
     return mutate((data) => {

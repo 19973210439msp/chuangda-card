@@ -1,25 +1,33 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const JSZip = require('jszip');
 const { rowsFromSpreadsheet, rowsFromDocx } = require('../lib/spreadsheet');
 
-test('xlsx import reads Chinese headers and keeps the phone as text', () => {
-  const sheet = XLSX.utils.aoa_to_sheet([
+test('xlsx import reads Chinese headers and keeps the phone as text', async () => {
+  const book = new ExcelJS.Workbook();
+  const sheet = book.addWorksheet('名片');
+  sheet.addRows([
     ['姓名', '职位', '手机号', '邮箱', '二维码', '公司', '地址'],
     ['陈美秀', 'COO', '19116390887', 'shuman@universalteck.cn', 'https://example.com/qr.png', '上海宇创爱科技有限公司', '上海市浦东新区金海路1809号'],
     ['无名', '助理', '', 'a@b.cn', '', '公司', '地址'],
   ]);
-  const book = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(book, sheet, '名片');
-  const buffer = XLSX.write(book, { type: 'buffer', bookType: 'xlsx' });
-  const rows = rowsFromSpreadsheet(buffer);
+  const buffer = await book.xlsx.writeBuffer();
+  const rows = await rowsFromSpreadsheet(Buffer.from(buffer), '.xlsx');
   assert.equal(rows.length, 2);
   assert.equal(rows[0].name, '陈美秀');
   assert.equal(rows[0].title, 'COO');
   assert.equal(rows[0].phone, '19116390887');
   assert.equal(rows[0].qr, 'https://example.com/qr.png');
   assert.equal(rows[1].phone, '');
+});
+
+test('csv import supports quoted commas', async () => {
+  const buffer = Buffer.from('姓名,职位,手机号,公司\n陈美秀,"联合创始人,COO",19116390887,创大产控\n');
+  const rows = await rowsFromSpreadsheet(buffer, '.csv');
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].title, '联合创始人,COO');
+  assert.equal(rows[0].phone, '19116390887');
 });
 
 test('docx import reads the first table and Chinese headers', async () => {

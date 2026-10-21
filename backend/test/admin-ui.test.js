@@ -91,3 +91,25 @@ test('hq employee creation and import include a target company selector', () => 
   assert.doesNotThrow(() => vm.runInContext("assertTemplateAssignment('classic', 'company-a')", context));
   assert.throws(() => vm.runInContext("assertTemplateAssignment('classic', 'company-b')", context), /未分配给目标企业/);
 });
+
+test('employee removal copy distinguishes permanent deletion from company authorization removal', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../admin-web/js/app.js'), 'utf8');
+  const page = { innerHTML: '', querySelector: () => null };
+  const context = vm.createContext({
+    document: { querySelector: (selector) => selector === '#app' ? page : null, addEventListener: () => {} },
+    window: { addEventListener: () => {} },
+    location: { hash: '#/cards' },
+    token: () => '',
+  });
+  vm.runInContext(source, context);
+
+  const hq = vm.runInContext("employeeRemovalCopy('张三', 'hq')", context);
+  assert.match(hq.confirm, /永久删除/);
+  assert.match(hq.confirm, /全部名片/);
+  assert.match(hq.success, /永久删除/);
+
+  const company = vm.runInContext("employeeRemovalCopy('张三', 'company')", context);
+  assert.match(company.confirm, /移除本公司授权/);
+  assert.doesNotMatch(company.confirm, /永久删除|全部名片/);
+  assert.match(company.success, /已移除本公司授权/);
+});

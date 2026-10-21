@@ -3,11 +3,10 @@ const { asyncRoute, httpError } = require('../lib/errors');
 const { requireEmployee } = require('../lib/access');
 const { getStore } = require('../storage');
 const { toSelf } = require('../lib/person');
-const { text, normalizePhone, normalizeEmail, assertMobile, assertEmail } = require('../lib/validate');
+const { text, normalizePhone, assertMobile } = require('../lib/validate');
 const { issueCode } = require('../lib/verify');
 const { smsReady, sendVerificationSms } = require('../lib/sms');
-const { mailReady, sendVerificationEmail } = require('../lib/mail');
-const { changePhone, changeEmail, closeAccount, listLinkedAccounts, switchLinkedAccount } = require('../lib/contact');
+const { changePhone, closeAccount, listLinkedAccounts, switchLinkedAccount } = require('../lib/contact');
 
 const router = express.Router();
 
@@ -53,33 +52,6 @@ router.put('/phone', asyncRoute(async (req, res) => {
     claimed: !!saved.claimed,
     loggedIn: !!saved.loggedIn,
   });
-}));
-
-router.post('/email/code', asyncRoute(async (req, res) => {
-  const user = requireEmployee(req);
-  const email = normalizeEmail(req.body && req.body.email);
-  assertEmail(email);
-  if (email === user.email) throw httpError(400, 'VALIDATION_ERROR', '与当前邮箱相同');
-  const ready = mailReady();
-  if (!ready && process.env.NODE_ENV === 'production') {
-    throw httpError(503, 'EMAIL_NOT_CONFIGURED', '邮件服务未配置');
-  }
-  const store = getStore();
-  const issued = await issueCode(store, {
-    userId: user.id,
-    channel: 'email',
-    target: email,
-    includeDevCode: !ready,
-  });
-  if (ready) await sendVerificationEmail(email, issued.code);
-  res.json(issued.body);
-}));
-
-router.put('/email', asyncRoute(async (req, res) => {
-  const user = requireEmployee(req);
-  const store = getStore();
-  const saved = await changeEmail(store, user, req.body || {});
-  res.json({ employee: toSelf(saved) });
 }));
 
 router.post('/close', asyncRoute(async (req, res) => {

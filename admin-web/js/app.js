@@ -74,6 +74,19 @@ function statusLabel(status) {
   return '在职';
 }
 
+function employeeRemovalCopy(name, scope) {
+  if (scope === 'company') {
+    return {
+      confirm: '确定移除本公司授权？员工「' + name + '」的本公司名片将归档，员工账号及其他公司的名片不受影响。',
+      success: '已移除本公司授权',
+    };
+  }
+  return {
+    confirm: '确定永久删除员工「' + name + '」及其全部名片记录？此操作不可恢复。',
+    success: '已永久删除员工及其全部名片记录',
+  };
+}
+
 function navViews() {
   if (state.admin && state.admin.scope === 'company') {
     return views.filter(([id]) => id !== 'companies');
@@ -325,13 +338,13 @@ function importHtml() {
   return shell('批量导入', `
     <form class="panel" data-form="batch">
       <h3>批量导入</h3>
-      <p class="lede">可粘贴表格，或选择 xlsx、xls、csv、docx 文件。Word 请把内容放在表格里，第一行写表头。表头为：姓名、职位、手机号、邮箱、公司、地址。手机号必填。这一批名片使用选中的模板。同一公司、同一模板、同一手机号会更新原名片；换一个模板会另外新建一张。</p>
+      <p class="lede">可粘贴表格，或选择 xlsx、xlsm、csv、tsv、docx 文件。旧版 xls 请先另存为 xlsx。Word 请把内容放在表格里，第一行写表头。表头为：姓名、职位、手机号、邮箱、公司、地址。手机号必填。这一批名片使用选中的模板。同一公司、同一模板、同一手机号会更新原名片；换一个模板会另外新建一张。</p>
       ${targetCompanyField('companyId', 'default')}
       ${templateChooser('cardTemplate', '')}
       <label for="batch">导入内容</label>
       <textarea id="batch" name="list" placeholder="姓名,职位,手机号,邮箱,二维码,公司,地址"></textarea>
       <div class="file-pick">
-        <input id="batch-file" class="file-pick-input" type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.txt,.tsv,.ods,.docx">
+        <input id="batch-file" class="file-pick-input" type="file" accept=".xlsx,.xlsm,.csv,.txt,.tsv,.docx">
         <label class="btn secondary" for="batch-file">选择文件</label>
         <span id="batch-file-name">未选择文件</span>
       </div>
@@ -1075,10 +1088,11 @@ document.addEventListener('click', async (event) => {
     }
     if (action === 'remove') {
       const person = state.employees.find((item) => item.id === id);
-      const ok = window.confirm('确定删除员工「' + (person ? person.name : '该员工') + '」及其全部名片记录？');
+      const copy = employeeRemovalCopy(person ? person.name : '该员工', state.admin && state.admin.scope);
+      const ok = window.confirm(copy.confirm);
       if (!ok) return;
       await api('/api/employees/' + id, { method: 'DELETE' });
-      showNotice('已删除');
+      showNotice(copy.success);
       await loadView('cards');
     }
   } catch (err) {

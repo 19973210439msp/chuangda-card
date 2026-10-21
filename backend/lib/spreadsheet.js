@@ -1,4 +1,8 @@
-const XLSX = require('xlsx');
+const { Readable } = require('stream');
+const ExcelJS = require('exceljs');
+
+const MAX_IMPORT_ROWS = 5000;
+const MAX_IMPORT_COLUMNS = 50;
 
 const HEADER = {
   姓名: 'name',
@@ -46,13 +50,60 @@ function normalizeImportRow(row) {
   return out;
 }
 
-function rowsFromSpreadsheet(buffer) {
-  const book = XLSX.read(buffer, { type: 'buffer', cellDates: false });
-  const name = book.SheetNames && book.SheetNames[0];
-  if (!name) return [];
-  const sheet = book.Sheets[name];
-  const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
-  return rows.map(normalizeImportRow).filter((row) => Object.keys(row).some((key) => row[key]));
+function assertSheetSize(sheet) {
+  if (sheet.actualRowCount > MAX_IMPORT_ROWS + 1) {
+    const err = new Error(`表格最多导入 ${MAX_IMPORT_ROWS} 行`);
+    err.code = 'SPREADSHEET_TOO_MANY_ROWS';
+    throw err;
+  }
+  if (sheet.actualColumnCount > MAX_IMPORT_COLUMNS) {
+    const err = new Error(`表格最多支持 ${MAX_IMPORT_COLUMNS} 列`);
+    err.code = 'SPREADSHEET_TOO_MANY_COLUMNS';
+    throw err;
+  }
+}
+
+function cellText(cell) {
+  return cell && cell.text != null ? String(cell.text).trim() : '';
+}
+
+function rowsFromWorksheet(sheet) {
+  if (!sheet) return [];
+  assertSheetSize(sheet);
+  const header = [];
+  sheet.getRow(1).eachCell({ includeEmpty: true }, (cell, column) => {
+    header[column] = cellText(cell);
+  });
+  const rows = [];
+  for (let rowNumber = 2; rowNumber <= sheet.actualRowCount; rowNumber += 1) {
+    const source = {};
+    const row = sheet.getRow(rowNumber);
+    for (let column = 1; column < header.length; column += 1) {
+      if (header[column]) source[header[column]] = cellText(row.getCell(column));
+    }
+    const normalized = normalizeImportRow(source);
+    if (Object.keys(normalized).some((key) => normalized[key])) rows.push(normalized);
+  }
+  return rows;
+}
+
+async function rowsFromSpreadsheet(buffer, extension = '.xlsx') {
+  const ext = String(extension || '').toLowerCase();
+  const book = new ExcelJS.Workbook();
+  let sheet;
+  if (ext === '.csv' || ext === '.txt' || ext === '.tsv') {
+    sheet = await book.csv.read(Readable.from(buffer), {
+      parserOptions: { delimiter: ext === '.tsv' ? '\t' : ',' },
+    });
+  } else if (ext === '.xlsx' || ext === '.xlsm') {
+    await book.xlsx.load(buffer);
+    sheet = book.worksheets[0];
+  } else {
+    const err = new Error('请上传 xlsx、xlsm、csv、tsv 或 docx 文件');
+    err.code = 'SPREADSHEET_UNSUPPORTED';
+    throw err;
+  }
+  return rowsFromWorksheet(sheet);
 }
 
 function decodeXml(text) {

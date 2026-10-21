@@ -95,6 +95,20 @@ async function ensureSchema() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (openid, person_id)
     );
+    DELETE FROM account_links
+      WHERE NOT EXISTS (SELECT 1 FROM people WHERE people.id = account_links.person_id);
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'account_links_person_fk'
+          AND conrelid = 'account_links'::regclass
+      ) THEN
+        ALTER TABLE account_links
+          ADD CONSTRAINT account_links_person_fk
+          FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE;
+      END IF;
+    END $$;
     CREATE TABLE IF NOT EXISTS card_applications (
       id TEXT PRIMARY KEY,
       person_id TEXT NOT NULL,
@@ -123,8 +137,10 @@ async function ensureSchema() {
       code_hash TEXT NOT NULL,
       expires_at TIMESTAMPTZ NOT NULL,
       used BOOLEAN NOT NULL DEFAULT FALSE,
+      failed_attempts INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    ALTER TABLE verify_codes ADD COLUMN IF NOT EXISTS failed_attempts INTEGER NOT NULL DEFAULT 0;
   `);
   await migrateDropAvatarPortrait();
   const existing = await query('SELECT id FROM company_settings WHERE id = $1', ['default']);
@@ -315,6 +331,7 @@ const store = {
     await query('DELETE FROM sessions WHERE user_id = $1', [id]);
     await query('DELETE FROM verify_codes WHERE user_id = $1', [id]);
     await query('DELETE FROM company_certifications WHERE person_id = $1', [id]);
+    await query('DELETE FROM account_links WHERE person_id = $1', [id]);
     await store.deleteHolderRefs(id);
     await store.deleteHolderRefsForCard(id);
     await store.deleteUploadsForUser(id);
@@ -403,6 +420,7 @@ const store = {
     await oss.put(key, buffer, {
       headers: {
         'Content-Type': contentType || 'application/octet-stream',
+        ...(contentType === 'application/pdf' ? { 'Content-Disposition': 'attachment' } : {}),
       },
     });
     const base = (process.env.OSS_PUBLIC_BASE || '').trim().replace(/\/$/, '');
@@ -629,20 +647,21 @@ const store = {
   },
   async insertCode(row) {
     await query(
-      `INSERT INTO verify_codes (id, user_id, channel, target, code_hash, expires_at, used, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [row.id, row.userId, row.channel, row.target, row.codeHash, row.expiresAt, row.used, row.createdAt]
+      `INSERT INTO verify_codes (id, user_id, channel, target, code_hash, expires_at, used, failed_attempts, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [row.id, row.userId, row.channel, row.target, row.codeHash, row.expiresAt, row.used, row.failedAttempts || 0, row.createdAt]
     );
     return row;
   },
-  async findValidCode({ userId, channel, target, codeHash, now }) {
+  async findActiveCode({ userId, channel, target, now }) {
     const result = await query(
-      `SELECT id, user_id, channel, target, code_hash, expires_at, used, created_at
+      `SELECT id, user_id, channel, target, code_hash, expires_at, used, failed_attempts, created_at
        FROM verify_codes
-       WHERE user_id = $1 AND channel = $2 AND target = $3 AND code_hash = $4
-         AND used = FALSE AND expires_at > $5
+       WHERE user_id = $1 AND channel = $2 AND target = $3
+         AND used = FALSE AND expires_at > $4
+       ORDER BY created_at DESC
        LIMIT 1`,
-      [userId, channel, target, codeHash, now]
+      [userId, channel, target, now]
     );
     const row = result.rows[0];
     if (!row) return null;
@@ -654,8 +673,20 @@ const store = {
       codeHash: row.code_hash,
       expiresAt: row.expires_at,
       used: row.used,
+      failedAttempts: row.failed_attempts,
       createdAt: row.created_at,
     };
+  },
+  async recordCodeFailure(id, maxAttempts) {
+    const result = await query(
+      `UPDATE verify_codes
+       SET failed_attempts = failed_attempts + 1,
+           used = used OR failed_attempts + 1 >= $2
+       WHERE id = $1 AND used = FALSE
+       RETURNING failed_attempts, used`,
+      [id, maxAttempts]
+    );
+    return result.rows[0] || null;
   },
   async markCodeUsed(id) {
     await query('UPDATE verify_codes SET used = TRUE WHERE id = $1', [id]);

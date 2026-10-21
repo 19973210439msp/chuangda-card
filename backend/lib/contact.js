@@ -233,15 +233,6 @@ async function openPhoneAccount(store, person, phone, sessionToken) {
   return { employee: fresh, claimed: false };
 }
 
-async function changeEmail(store, person, body) {
-  const email = normalizeEmail(body && body.email);
-  assertEmail(email);
-  if (email === person.email) throw httpError(400, 'VALIDATION_ERROR', '与当前邮箱相同');
-  await consumeCode(store, { userId: person.id, channel: 'email', target: email, code: body && body.code });
-  const next = { ...person, email, updatedAt: nowIso() };
-  return store.updatePerson(person.id, next);
-}
-
 async function closeAccount(store, person) {
   const next = { ...person, status: 'closed', updatedAt: nowIso() };
   await store.updatePerson(person.id, next);
@@ -252,7 +243,6 @@ async function closeAccount(store, person) {
 module.exports = {
   saveSelfCard,
   changePhone,
-  changeEmail,
   closeAccount,
   rememberOpenAccount,
   listLinkedAccounts,

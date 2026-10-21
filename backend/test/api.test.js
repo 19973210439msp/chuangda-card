@@ -23,6 +23,7 @@ process.env.LOGIN_LOCK_MS = '200';
 
 const { app } = require('../server');
 const { getStore } = require('../storage');
+const { blankPerson } = require('../lib/person');
 const crypto = require('node:crypto');
 
 let server;
@@ -483,6 +484,11 @@ test('deleting an employee also removes that card\'s view records', async () => 
     used: false,
     createdAt: new Date().toISOString(),
   });
+  await store.saveAccountLink({
+    openid: 'openid-' + cardId,
+    personId: cardId,
+    createdAt: new Date().toISOString(),
+  });
   const uploadName = 'del-' + cardId + '.png';
   const uploadPath = path.join(require('../config').uploadDir(), uploadName);
   fs.mkdirSync(path.dirname(uploadPath), { recursive: true });
@@ -497,6 +503,7 @@ test('deleting an employee also removes that card\'s view records', async () => 
   const otherViewCount = before.views.filter((view) => view.cardId !== cardId).length;
   assert.equal(before.views.some((view) => view.id === viewed.json.viewId), true);
   assert.equal(before.codes.some((row) => row.userId === cardId), true);
+  assert.equal(before.accountLinks.some((row) => row.personId === cardId), true);
   assert.equal(fs.existsSync(uploadPath), true);
 
   const removed = await api('/api/employees/' + cardId, { method: 'DELETE', token: admin.json.token });
@@ -509,6 +516,7 @@ test('deleting an employee also removes that card\'s view records', async () => 
   assert.equal(after.sessions.some((session) => session.userId === cardId), false);
   assert.equal(after.holders.some((item) => item.userId === cardId || item.cardId === cardId), false);
   assert.equal(after.codes.some((row) => row.userId === cardId), false);
+  assert.equal(after.accountLinks.some((row) => row.personId === cardId), false);
   assert.equal(fs.existsSync(uploadPath), false);
   assert.equal(after.views.filter((view) => view.cardId !== cardId).length, otherViewCount);
 
@@ -516,6 +524,85 @@ test('deleting an employee also removes that card\'s view records', async () => 
   assert.equal(listed.status, 200);
   assert.equal(listed.json.items.length, 0);
   assert.equal(listed.json.total, 0);
+});
+
+test('admin update rejects a zero-card employee instead of reporting a false save', async () => {
+  const admin = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
+  const store = getStore();
+  const person = blankPerson({
+    id: 'emp-zero-card-admin-edit',
+    employeeNo: 'zero-card-edit',
+    name: '',
+    phone: '13800003998',
+    cards: [],
+  });
+  await store.insertPerson(person);
+
+  const saved = await api('/api/employees/' + person.id, {
+    method: 'PUT',
+    token: admin.json.token,
+    body: { name: '不会被假保存', phone: person.phone },
+  });
+  assert.equal(saved.status, 409);
+  assert.equal(saved.json.error.code, 'NO_ACTIVE_CARD');
+  assert.equal((await store.getPerson(person.id)).name, '');
+  await store.deletePerson(person.id);
+});
+
+test('hq new-card action appends a card even when the company and template repeat', async () => {
+  const admin = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
+  const templates = ['classic', 'horizon', 'classic'];
+  let latest;
+  for (let index = 0; index < templates.length; index += 1) {
+    latest = await api('/api/employees', {
+      method: 'POST',
+      token: admin.json.token,
+      body: {
+        name: '重复模板名片 ' + (index + 1),
+        phone: '13800003997',
+        companyId: 'default',
+        cardTemplate: templates[index],
+      },
+    });
+    assert.ok([200, 201].includes(latest.status), JSON.stringify(latest.json));
+  }
+
+  assert.equal(latest.json.employee.cards.length, 3);
+  assert.equal(new Set(latest.json.employee.cards.map((card) => card.id)).size, 3);
+  assert.deepEqual(latest.json.employee.cards.map((card) => card.template), templates);
+  await getStore().deletePerson(latest.json.employee.id);
+});
+
+test('upload rejects content whose bytes do not match the file extension', async () => {
+  const employee = await api('/api/auth/wechat', {
+    method: 'POST',
+    body: { code: 'dev:spoofed-upload' },
+  });
+  const form = new FormData();
+  form.append('file', new Blob([Buffer.from('<script>alert(1)</script>')], { type: 'text/html' }), 'avatar.png');
+
+  const uploaded = await api('/api/upload', { method: 'POST', token: employee.json.token, form });
+  assert.equal(uploaded.status, 400);
+  assert.equal(uploaded.json.error.code, 'UNSUPPORTED_FILE_TYPE');
+});
+
+test('upload derives image content type from bytes and serves it with nosniff', async () => {
+  const employee = await api('/api/auth/wechat', {
+    method: 'POST',
+    body: { code: 'dev:valid-upload' },
+  });
+  const pngHeader = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const form = new FormData();
+  form.append('file', new Blob([pngHeader], { type: 'text/html' }), 'safe.png');
+
+  const uploaded = await api('/api/upload', { method: 'POST', token: employee.json.token, form });
+  assert.equal(uploaded.status, 201);
+  const response = await fetch(base + uploaded.json.url);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-type'), 'image/png');
+  assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+  const filename = path.basename(uploaded.json.url);
+  fs.rmSync(path.join(require('../config').uploadDir(), filename), { force: true });
 });
 
 test('analytics summary counts every view and list paginates', async () => {
@@ -633,6 +720,14 @@ test('company admin isolation and pinned share links', async () => {
   assert.equal(subLogin.status, 200);
   assert.equal(subLogin.json.scope, 'company');
   const subToken = subLogin.json.token;
+
+  const ownCompany = await api('/api/company', { token: subToken });
+  assert.equal(ownCompany.status, 200);
+  assert.equal(ownCompany.json.company.name, '子公司甲');
+  assert.match(ownCompany.json.company.certCode, /^[A-Z0-9]{6}$/);
+  const otherCompany = await api('/api/company?id=default', { token: subToken });
+  assert.equal(otherCompany.status, 403);
+  assert.equal(otherCompany.json.error.code, 'FORBIDDEN');
 
   const companies = await api('/api/companies', { token: subToken });
   assert.equal(companies.status, 403);

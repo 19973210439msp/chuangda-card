@@ -4,6 +4,7 @@ const { httpError } = require('./errors');
 const TTL_MS = 10 * 60 * 1000;
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_IN_WINDOW = 5;
+const MAX_FAILED_ATTEMPTS = 5;
 
 function hashCode(code) {
   return crypto.createHash('sha256').update(String(code)).digest('hex');
@@ -28,6 +29,7 @@ async function issueCode(store, { userId, channel, target, includeDevCode }) {
     codeHash: hashCode(code),
     expiresAt: new Date(Date.now() + TTL_MS).toISOString(),
     used: false,
+    failedAttempts: 0,
     createdAt: new Date().toISOString(),
   };
   await store.insertCode(row);
@@ -42,14 +44,20 @@ async function consumeCode(store, { userId, channel, target, code }) {
   if (!/^\d{6}$/.test(raw)) {
     throw httpError(400, 'CODE_INVALID', '请填写 6 位验证码');
   }
-  const row = await store.findValidCode({
+  const row = await store.findActiveCode({
     userId,
     channel,
     target,
-    codeHash: hashCode(raw),
     now: new Date().toISOString(),
   });
   if (!row) throw httpError(400, 'CODE_INVALID', '验证码不正确或已过期');
+  const actual = Buffer.from(String(row.codeHash || ''));
+  const supplied = Buffer.from(hashCode(raw));
+  const matches = actual.length === supplied.length && crypto.timingSafeEqual(actual, supplied);
+  if (!matches) {
+    await store.recordCodeFailure(row.id, MAX_FAILED_ATTEMPTS);
+    throw httpError(400, 'CODE_INVALID', '验证码不正确或已过期');
+  }
   await store.markCodeUsed(row.id);
 }
 
