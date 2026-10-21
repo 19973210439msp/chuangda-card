@@ -12,10 +12,10 @@ const { stripAvatarPortrait } = require('./lib/media');
 const { openIdFromCode, phoneFromWechatCode } = require('./lib/wechat');
 const { claimImportedCard } = require('./lib/claim');
 const { saveSelfCard, rememberOpenAccount } = require('./lib/contact');
-const { writeDefault, writeCard, writeCompanyTemplateCard, removeCard, archiveCard, archiveCompanyCards, addCard, switchTo, ensureCards, projectCard, projectActive, TEMPLATES } = require('./lib/cards');
+const { writeDefault, writeCard, writeCompanyTemplateCard, removeCard, archiveCard, archiveCompanyCards, addCard, switchTo, ensureCards, projectCard, projectActive } = require('./lib/cards');
 const { publicCardState } = require('./lib/cardAccess');
 const { makeCertCode, hideCertCode } = require('./lib/certify');
-const { allTemplates, listTemplates, visibleTemplates, templateFor, templateGrantedTo, setBuiltInAssignments, createTemplate, companyForTemplate } = require('./lib/templates');
+const { allTemplates, listTemplates, visibleTemplates, templateGrantedTo, setBuiltInAssignments, createTemplate, companyForTemplate } = require('./lib/templates');
 const { listCertifications, saveCertification, approvedCompanyIds, migrateLegacyCertifications } = require('./lib/certifications');
 const { migrateCardRecords } = require('./lib/cardMigration');
 const {
@@ -112,6 +112,10 @@ function publicCard(person, shareCardId) {
   delete card.kind;
   delete card.status;
   return card;
+}
+
+function viewUpdateTokenHash(token) {
+  return crypto.createHash('sha256').update(String(token || '')).digest('hex');
 }
 
 function matchesQuery(person, q) {
@@ -327,12 +331,23 @@ async function visibleCompanyScope(admin) {
   return { personIds, cardIds };
 }
 
-async function allowedCardTemplate(templateId, admin) {
+async function companyTargetForAdmin(admin, requestedCompanyId) {
+  const requested = text(requestedCompanyId, 40);
+  const companyId = admin && admin.scope === 'company' ? admin.companyId : (requested || 'default');
+  const company = await store.getCompany(companyId);
+  if (!company) throw httpError(404, 'NOT_FOUND', '公司不存在');
+  return { companyId, company };
+}
+
+async function allowedCardTemplate(templateId, admin, companyId) {
   const root = await store.getCompany('default');
   const requested = templateId || (admin && admin.scope === 'hq' ? 'classic' : '');
   if (!requested) throw httpError(400, 'VALIDATION_ERROR', '当前企业没有可用模板');
-  const selected = templateFor(root, requested, admin);
-  if (!selected) throw httpError(403, 'TEMPLATE_FORBIDDEN', '该模板未分配给当前子管理员');
+  const selected = allTemplates(root).find((item) => item.id === requested);
+  if (!selected) throw httpError(400, 'VALIDATION_ERROR', '模板不存在');
+  if (!templateGrantedTo(root, requested, companyId)) {
+    throw httpError(403, 'TEMPLATE_FORBIDDEN', '该模板未分配给目标企业');
+  }
   return selected;
 }
 
@@ -479,22 +494,6 @@ app.post('/api/auth/wechat', asyncRoute(async (req, res) => {
   }
 
   if (!person) {
-    const legacyCard = config.cardAccessV2Enabled() ? null : {
-      id: 'card-default',
-      template: 'classic',
-      isDefault: true,
-      name: '',
-      company: '',
-      title: '',
-      phone,
-      wechat: '',
-      email: '',
-      address: '',
-      companyId: '',
-      lifecycle: 'active',
-      source: 'legacy_registration',
-      attachments: [],
-    };
     person = blankPerson({
       id: 'emp-' + crypto.randomBytes(4).toString('hex'),
       kind: 'employee',
@@ -502,8 +501,8 @@ app.post('/api/auth/wechat', asyncRoute(async (req, res) => {
       phone,
       authPhone: phone,
       company: '',
-      cards: legacyCard ? [legacyCard] : [],
-      activeCardId: legacyCard ? legacyCard.id : '',
+      cards: [],
+      activeCardId: '',
     });
     await store.insertPerson(person);
   } else if (phone && (!person.authPhone || !person.phone)) {
@@ -666,16 +665,16 @@ app.get('/api/employees', asyncRoute(async (req, res) => {
 app.post('/api/employees', asyncRoute(async (req, res) => {
   requireAdmin(req);
   const admin = adminOf(req);
-  const companyId = admin.scope === 'company' ? admin.companyId : 'default';
-  const company = await store.getCompany(companyId);
+  const { companyId, company } = await companyTargetForAdmin(admin, req.body && req.body.companyId);
   const draft = applyAdminFields(blankPerson({
     id: 'pending',
     company: company ? company.name : '',
     companyId,
   }), req.body || {});
   draft.companyId = companyId;
+  draft.company = company.name || '';
   const cardTemplate = text(req.body && req.body.cardTemplate, 20);
-  const selectedTemplate = await allowedCardTemplate(cardTemplate, admin);
+  const selectedTemplate = await allowedCardTemplate(cardTemplate, admin, companyId);
   draft.cardTemplate = selectedTemplate.id;
   draft.templateName = selectedTemplate.name;
   assertStaffIdentity(draft);
@@ -688,8 +687,9 @@ app.post('/api/employees', asyncRoute(async (req, res) => {
 
 async function importEmployeeList(list, res, options) {
   if (!Array.isArray(list) || !list.length) throw httpError(400, 'VALIDATION_ERROR', '请提供 list 数组');
-  const companyId = (options && options.companyId) || 'default';
-  const selectedTemplate = await allowedCardTemplate(options && options.cardTemplate, options && options.admin);
+  const companyId = text(options && options.companyId, 40);
+  if (!companyId) throw httpError(400, 'VALIDATION_ERROR', '创建企业名片必须指定企业');
+  const selectedTemplate = await allowedCardTemplate(options && options.cardTemplate, options && options.admin, companyId);
   const cardTemplate = selectedTemplate.id;
   const company = await store.getCompany(companyId);
   const prepared = [];
@@ -706,6 +706,7 @@ async function importEmployeeList(list, res, options) {
         company: company ? company.name : '',
       }), source);
       draft.companyId = companyId;
+      draft.company = company ? company.name : '';
       draft.cardTemplate = cardTemplate;
       draft.templateName = selectedTemplate.name;
       if (!draft.phone) {
@@ -743,7 +744,7 @@ async function importEmployeeList(list, res, options) {
 app.post('/api/employees/batch', asyncRoute(async (req, res) => {
   requireAdmin(req);
   const admin = adminOf(req);
-  const companyId = admin.scope === 'company' ? admin.companyId : 'default';
+  const { companyId } = await companyTargetForAdmin(admin, req.body && req.body.companyId);
   await importEmployeeList(req.body && req.body.list, res, {
     companyId,
     cardTemplate: text(req.body && req.body.cardTemplate, 20),
@@ -769,10 +770,12 @@ app.post('/api/employees/import-file', importUpload.single('file'), asyncRoute(a
     throw httpError(400, 'VALIDATION_ERROR', err.code && err.message ? err.message : '无法识别这个文件');
   }
   if (!rows.length) throw httpError(400, 'VALIDATION_ERROR', '表格里没有可导入的数据');
+  const admin = adminOf(req);
+  const { companyId } = await companyTargetForAdmin(admin, req.body && req.body.companyId);
   await importEmployeeList(rows, res, {
-    companyId: adminOf(req).scope === 'company' ? adminOf(req).companyId : 'default',
+    companyId,
     cardTemplate: text(req.body && req.body.cardTemplate, 20),
-    admin: adminOf(req),
+    admin,
   });
 }));
 
@@ -823,9 +826,9 @@ app.put('/api/employees/:id', asyncRoute(async (req, res) => {
   const body = { ...(req.body || {}) };
   const cardId = text(body.cardId, 40);
   const admin = adminOf(req);
+  const ready = ensureCards(person);
   if (admin.scope === 'company') {
     if (!cardId) throw httpError(400, 'VALIDATION_ERROR', '请指定要修改的名片');
-    const ready = ensureCards(person);
     const owned = ready.cards.find((card) => (
       card.id === cardId && card.companyId === admin.companyId && card.lifecycle === 'active'
     ));
@@ -835,8 +838,12 @@ app.put('/api/employees/:id', asyncRoute(async (req, res) => {
     delete body.department;
   }
   const next = applyAdminFields(person, body);
-  const readyCards = (Array.isArray(person.cards) && person.cards.length) ? person.cards : [];
-  const targetCard = readyCards.find((card) => card.id === cardId) || readyCards.find((card) => card.isDefault);
+  const targetCard = ready.cards.find((card) => card.id === cardId) || ready.cards.find((card) => card.isDefault);
+  const touchesCard = ['name', 'company', 'title', 'phone', 'wechat', 'email', 'address']
+    .some((key) => body[key] !== undefined);
+  if (touchesCard && targetCard && targetCard.lifecycle !== 'active') {
+    throw httpError(409, 'CARD_ARCHIVED', '已归档名片不能修改');
+  }
   const requirePhone = !targetCard || targetCard.isDefault || !cardId;
   if (requirePhone && !next.phone) throw httpError(400, 'VALIDATION_ERROR', '手机号不能为空');
   await assertEmployeeNoFree(next.employeeNo, person.id);
@@ -850,8 +857,6 @@ app.put('/api/employees/:id', asyncRoute(async (req, res) => {
     email: next.email,
     address: next.address,
   };
-  const touchesCard = ['name', 'company', 'title', 'phone', 'wechat', 'email', 'address']
-    .some((key) => body[key] !== undefined);
   let stored = next;
   if (touchesCard) {
     stored = cardId ? writeCard(next, cardId, fields) : writeDefault(next, fields);
@@ -893,7 +898,7 @@ app.delete('/api/employees/:id', asyncRoute(async (req, res) => {
 app.get('/api/employee/companies', asyncRoute(async (req, res) => {
   requireEmployee(req);
   const items = (await store.listCompanies())
-    .filter((item) => item.id && (config.cardAccessV2Enabled() || item.id !== 'default'))
+    .filter((item) => item.id)
     .map((item) => ({ id: item.id, name: item.name || '', shortName: item.shortName || '' }));
   res.json({ items });
 }));
@@ -1048,32 +1053,6 @@ app.get('/api/employee/templates', asyncRoute(async (req, res) => {
   const user = requireEmployee(req);
   const root = await store.getCompany('default');
   const approvedIds = await approvedCompanyIds(store, user.id);
-  if (!config.cardAccessV2Enabled()) {
-    const builtIns = Object.entries(TEMPLATES).map(([id, name]) => ({
-      id,
-      name,
-      companyId: '',
-      companyName: '总公司',
-      company: hideCertCode(root),
-    }));
-    const custom = [];
-    for (const template of listTemplates(root)) {
-      for (const companyId of template.companyIds || []) {
-        if (!approvedIds.has(companyId)) continue;
-        const company = await store.getCompany(companyId);
-        if (!company) continue;
-        custom.push({
-          id: template.id,
-          name: template.name,
-          companyId,
-          companyName: company.name,
-          company: hideCertCode(companyForTemplate(company, root, template.id)),
-        });
-      }
-    }
-    res.json({ items: builtIns.concat(custom) });
-    return;
-  }
   const items = [];
   for (const template of allTemplates(root)) {
     for (const companyId of template.companyIds || []) {
@@ -1102,18 +1081,6 @@ app.post('/api/employee/cards', asyncRoute(async (req, res) => {
   const user = requireEmployee(req);
   const template = text(req.body && req.body.template, 20);
   const companyId = text(req.body && req.body.companyId, 40);
-  if (!config.cardAccessV2Enabled() && Object.prototype.hasOwnProperty.call(TEMPLATES, template)) {
-    let next;
-    try {
-      next = addCard(user, template, { source: 'legacy_employee_created' });
-    } catch (err) {
-      throw httpError(err.status || 400, err.code || 'VALIDATION_ERROR', err.message || '无法创建名片');
-    }
-    next.updatedAt = nowIso();
-    const saved = await store.updatePerson(user.id, next);
-    res.status(201).json({ employee: toSelf(saved) });
-    return;
-  }
   if (!companyId) throw httpError(400, 'VALIDATION_ERROR', '请选择已认证企业');
   const root = await store.getCompany('default');
   const selected = allTemplates(root).find((item) => item.id === template);
@@ -1156,9 +1123,6 @@ app.delete('/api/employee/cards/:cardId', asyncRoute(async (req, res) => {
   const user = requireEmployee(req);
   const card = ensureCards(user).cards.find((item) => item.id === req.params.cardId);
   if (!card) throw httpError(404, 'NOT_FOUND', '名片不存在');
-  if (card.lifecycle !== 'active') {
-    throw httpError(409, 'CARD_ARCHIVED', '已归档名片不能修改');
-  }
   let next;
   try {
     next = removeCard(user, req.params.cardId);
@@ -1246,6 +1210,7 @@ app.post('/api/analytics/view', asyncRoute(async (req, res) => {
   const state = publicCardState(person, shareCard);
   if (!state.ok) throw httpError(404, state.code, state.message);
   const viewer = req.user && req.user.kind === 'employee' ? req.user : null;
+  const updateToken = crypto.randomBytes(16).toString('hex');
   const view = {
     id: 'view-' + crypto.randomBytes(6).toString('hex'),
     cardId,
@@ -1258,21 +1223,33 @@ app.post('/api/analytics/view', asyncRoute(async (req, res) => {
     startedAt: nowIso(),
     durationSec: 0,
     exchange: null,
+    updateTokenHash: viewUpdateTokenHash(updateToken),
   };
   await store.insertView(view);
-  res.status(201).json({ viewId: view.id });
+  res.status(201).json({ viewId: view.id, updateToken });
 }));
 
 app.put('/api/analytics/view/:id', asyncRoute(async (req, res) => {
   const view = await store.getView(req.params.id);
   if (!view) throw httpError(404, 'NOT_FOUND', '浏览记录不存在');
+  const updateToken = text(req.body && req.body.updateToken, 128);
+  if (!updateToken || !view.updateTokenHash || !safeEqual(view.updateTokenHash, viewUpdateTokenHash(updateToken))) {
+    throw httpError(403, 'FORBIDDEN', '浏览记录更新凭证无效');
+  }
   const next = { ...view };
   if (req.body && req.body.durationSec != null) {
     const duration = Number(req.body.durationSec);
     if (!Number.isFinite(duration) || duration < 0 || duration > 60 * 60 * 12) {
       throw httpError(400, 'VALIDATION_ERROR', '停留时长不正确');
     }
-    next.durationSec = Math.max(Number(view.durationSec) || 0, Math.round(duration));
+    const startedAt = Date.parse(view.startedAt);
+    const elapsedLimit = Number.isFinite(startedAt)
+      ? Math.max(0, Math.ceil((Date.now() - startedAt) / 1000) + 30)
+      : 0;
+    next.durationSec = Math.max(
+      Number(view.durationSec) || 0,
+      Math.min(Math.round(duration), elapsedLimit),
+    );
   }
   if (req.body && req.body.exchange) {
     const exchange = req.body.exchange;

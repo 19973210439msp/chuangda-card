@@ -1,5 +1,4 @@
 const crypto = require('crypto');
-const config = require('../config');
 const { httpError } = require('./errors');
 const { assertPhoneAvailable, findOccupyingPhone } = require('./identity');
 const { claimImportedCard } = require('./claim');
@@ -61,18 +60,6 @@ async function saveSelfCard(store, person, body) {
     const ready = ensureCards(person);
     const active = ready.cards.find((card) => card.id === ready.activeCardId) || ready.cards[0];
     if (!active) throw httpError(409, 'NO_ACTIVE_CARD', '请先通过企业认证并创建名片');
-    if (!config.cardAccessV2Enabled()) {
-      const allowed = await approvedCompanyIds(store, person.id);
-      if (active.companyId) allowed.add(active.companyId);
-      if (wanted && wanted !== 'default' && !allowed.has(wanted)) {
-        throw httpError(403, 'FORBIDDEN', '只能选择总公司或已认证的子公司');
-      }
-      const legacyCompanyId = !wanted || wanted === 'default' ? '' : wanted;
-      const assigned = assignCardCompany(synced, synced.activeCardId, legacyCompanyId, synced.company);
-      if (assigned) synced = assigned;
-      synced.updatedAt = next.updatedAt;
-      return store.updatePerson(person.id, synced);
-    }
     if (!wanted) throw httpError(400, 'VALIDATION_ERROR', '请选择已认证企业');
     const owned = String(active.companyId || '');
     const allowed = await approvedCompanyIds(store, person.id);
@@ -226,30 +213,14 @@ async function openPhoneAccount(store, person, phone, sessionToken) {
     return { employee: saved, claimed: true };
   }
   await assertPhoneAvailable(store, phone, person.id);
-  const legacyCard = config.cardAccessV2Enabled() ? null : {
-    id: 'card-default',
-    template: 'classic',
-    isDefault: true,
-    name: '',
-    company: '',
-    title: '',
-    phone,
-    wechat: '',
-    email: '',
-    address: '',
-    companyId: '',
-    lifecycle: 'active',
-    source: 'legacy_registration',
-    attachments: [],
-  };
   const fresh = blankPerson({
     id: 'emp-' + crypto.randomBytes(4).toString('hex'),
     kind: 'employee',
     openid: person.openid || '',
     phone,
     authPhone: phone,
-    cards: legacyCard ? [legacyCard] : [],
-    activeCardId: legacyCard ? legacyCard.id : '',
+    cards: [],
+    activeCardId: '',
   });
   await store.insertPerson(fresh);
   if (sessionToken) await store.reassignSessionUser(sessionToken, fresh.id);

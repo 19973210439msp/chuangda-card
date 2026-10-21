@@ -20,6 +20,7 @@ function publicCardState(person, shareCardId) {
   if (!card) return denied('NO_ACTIVE_CARD', '账号还没有可用名片');
   if (card.lifecycle === 'archived') return denied('CARD_ARCHIVED', '名片已归档');
   if (card.lifecycle !== 'active') return denied('NO_ACTIVE_CARD', '账号还没有可用名片');
+  if (!card.companyId) return denied('CARD_UNASSIGNED', '名片尚未归属认证企业');
 
   return {
     ok: true,

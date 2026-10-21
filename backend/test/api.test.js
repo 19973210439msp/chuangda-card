@@ -238,14 +238,24 @@ test('employee card, holder, account and analytics', async () => {
     body: { cardId: 'emp-1001', visitorId: 'visitor-test' },
   });
   assert.equal(viewed.status, 201);
+  assert.match(viewed.json.updateToken, /^[a-f0-9]{32}$/);
+  const rejectedDuration = await api('/api/analytics/view/' + viewed.json.viewId, {
+    method: 'PUT',
+    body: { updateToken: 'wrong-token', durationSec: 90 },
+  });
+  assert.equal(rejectedDuration.status, 403);
   const guestList = await api('/api/analytics/list?cardId=emp-1001', { token: adminToken });
   const guest = guestList.json.items.find((item) => item.visitorId === 'visitor-test');
   assert.equal(guest.name, '游客访问');
+  assert.equal(Object.prototype.hasOwnProperty.call(guest, 'updateTokenHash'), false);
   const duration = await api('/api/analytics/view/' + viewed.json.viewId, {
     method: 'PUT',
-    body: { durationSec: 90, exchange: { name: '来访者', phone: '13700008888', company: '南市集团' } },
+    body: { updateToken: viewed.json.updateToken, durationSec: 90, exchange: { name: '来访者', phone: '13700008888', company: '南市集团' } },
   });
   assert.equal(duration.status, 200);
+  const securedList = await api('/api/analytics/list?cardId=emp-1001', { token: adminToken });
+  const securedView = securedList.json.items.find((item) => item.visitorId === 'visitor-test');
+  assert.ok(securedView.durationSec <= 31);
   const summary = await api('/api/analytics/summary?cardId=emp-1001', { token: adminToken });
   assert.equal(summary.status, 200);
   assert.ok(summary.json.items[0].views >= 3);
@@ -525,7 +535,7 @@ test('analytics summary counts every view and list paginates', async () => {
     assert.equal(viewed.status, 201);
     await api('/api/analytics/view/' + viewed.json.viewId, {
       method: 'PUT',
-      body: { durationSec: 30 + i },
+      body: { updateToken: viewed.json.updateToken, durationSec: 30 + i },
     });
   }
   const summary = await api('/api/analytics/summary?cardId=' + encodeURIComponent(cardId), { token: admin.json.token });
@@ -626,6 +636,31 @@ test('company admin isolation and pinned share links', async () => {
 
   const companies = await api('/api/companies', { token: subToken });
   assert.equal(companies.status, 403);
+
+  const hqCreatedForSubsidiary = await api('/api/employees', {
+    method: 'POST', token: hqToken,
+    body: {
+      companyId,
+      cardTemplate: 'classic',
+      name: '总部代建子公司员工',
+      phone: '13911110000',
+      title: '平台主管',
+    },
+  });
+  assert.equal(hqCreatedForSubsidiary.status, 201, JSON.stringify(hqCreatedForSubsidiary.json));
+  assert.equal(hqCreatedForSubsidiary.json.employee.cards[0].companyId, companyId);
+  assert.equal(hqCreatedForSubsidiary.json.employee.cards[0].company, '子公司甲');
+  const hqImportedForSubsidiary = await api('/api/employees/batch', {
+    method: 'POST', token: hqToken,
+    body: {
+      companyId,
+      cardTemplate: 'classic',
+      list: [{ name: '总部代导子公司员工', phone: '13911110004', title: '平台主管' }],
+    },
+  });
+  assert.equal(hqImportedForSubsidiary.status, 201, JSON.stringify(hqImportedForSubsidiary.json));
+  assert.equal(hqImportedForSubsidiary.json.items[0].cards[0].companyId, companyId);
+  assert.equal(hqImportedForSubsidiary.json.items[0].cards[0].company, '子公司甲');
 
   const hqOnly = await api('/api/employees', {
     method: 'POST',
@@ -768,6 +803,10 @@ test('company admin isolation and pinned share links', async () => {
   assert.equal(still.json.employee.cards.some((card) => (
     card.id === ownCardId && card.lifecycle === 'archived'
   )), true);
+  assert.equal((await api('/api/employees/' + personId, {
+    method: 'PUT', token: hqToken,
+    body: { cardId: ownCardId, name: '不能修改归档卡', phone: '13911110002' },
+  })).status, 409);
 
   const subOnly = await api('/api/employees', {
     method: 'POST',
@@ -884,37 +923,6 @@ test('restored account can be switched into even if another wechat still holds i
   assert.equal(back.json.employee.id, phoneId);
   const me = await api('/api/employee/me', { token: again.json.token });
   assert.equal(me.json.employee.id, phoneId);
-});
-
-test('disabled v2 flag keeps the published legacy mini program working', async () => {
-  const previous = process.env.CARD_ACCESS_V2;
-  process.env.CARD_ACCESS_V2 = 'false';
-  try {
-    const login = await api('/api/auth/wechat', {
-      method: 'POST', body: { code: 'dev:legacy-client-compatibility' },
-    });
-    assert.equal(login.status, 200);
-    assert.equal(login.json.employee.cards.length, 1);
-    assert.equal(login.json.employee.cardTemplate, 'classic');
-
-    const templates = await api('/api/employee/templates', { token: login.json.token });
-    assert.deepEqual(templates.json.items.slice(0, 3).map((item) => item.id), [
-      'classic', 'horizon', 'wave',
-    ]);
-    const created = await api('/api/employee/cards', {
-      method: 'POST', token: login.json.token, body: { template: 'horizon' },
-    });
-    assert.equal(created.status, 201);
-    assert.equal(created.json.employee.companyId, '');
-    const edited = await api('/api/employee/me', {
-      method: 'PUT', token: login.json.token,
-      body: { name: '旧版客户端用户', company: '创大产控', companyId: '' },
-    });
-    assert.equal(edited.status, 200, JSON.stringify(edited.json));
-  } finally {
-    if (previous === undefined) delete process.env.CARD_ACCESS_V2;
-    else process.env.CARD_ACCESS_V2 = previous;
-  }
 });
 
 test('employee certification is account-level and enables the first subsidiary card', async () => {
@@ -1068,8 +1076,8 @@ test('employee certification is account-level and enables the first subsidiary c
   const archivedDelete = await api('/api/employee/cards/' + cardId, {
     method: 'DELETE', token,
   });
-  assert.equal(archivedDelete.status, 409);
-  assert.equal(archivedDelete.json.error.code, 'CARD_ARCHIVED');
+  assert.equal(archivedDelete.status, 200);
+  assert.equal(archivedDelete.json.employee.cards.some((card) => card.id === cardId), false);
   const left = await api('/api/employee/certification', { token });
   assert.equal(left.json.certified.some((item) => item.companyId === companyId), false);
   assert.equal(left.json.certified.some((item) => item.companyId === other.json.id), true);
@@ -1173,6 +1181,22 @@ test('hq creates a named classic template and assigns it to one subsidiary', asy
     method: 'POST', token: admin2.json.token,
     body: { name: '越权员工', phone: '13922220001', cardTemplate: templateId },
   })).status, 403);
+  assert.equal((await api('/api/employees', {
+    method: 'POST', token: hq.json.token,
+    body: {
+      companyId: second.json.id,
+      name: '总部错误分配模板', phone: '13922220003', cardTemplate: templateId,
+    },
+  })).status, 403);
+  const hqAssigned = await api('/api/employees', {
+    method: 'POST', token: hq.json.token,
+    body: {
+      companyId: first.json.id,
+      name: '总部代建模板员工', phone: '13922220004', cardTemplate: templateId,
+    },
+  });
+  assert.equal(hqAssigned.status, 201);
+  assert.equal(hqAssigned.json.employee.cards[0].companyId, first.json.id);
   const employee = await api('/api/employees', {
     method: 'POST', token: admin1.json.token,
     body: { name: '模板员工', phone: '13922220002', cardTemplate: templateId },
@@ -1400,6 +1424,15 @@ test('holder pins one employee card and hides it after certification revocation'
   assert.equal((await api('/api/certifications/' + application.json.application.id + '/revoke', {
     method: 'POST', token: hq.json.token, body: {},
   })).status, 200);
+  const revokedShared = await api('/api/cards/' + target.json.employee.id + '?shareCard=' + encodeURIComponent(secondCardId));
+  assert.equal(revokedShared.status, 404);
+  assert.equal(revokedShared.json.error.code, 'CARD_ARCHIVED');
+  assert.equal((await api('/api/cards/' + target.json.employee.id + '/qr?shareCard=' + encodeURIComponent(secondCardId))).status, 404);
   const afterRevoke = await api('/api/holder', { token: viewer.json.token });
   assert.equal(afterRevoke.json.items.some((item) => item.cardId === target.json.employee.id), false);
+  const deletedArchived = await api('/api/employee/cards/' + secondCardId, {
+    method: 'DELETE', token: targetToken,
+  });
+  assert.equal(deletedArchived.status, 200);
+  assert.equal(deletedArchived.json.employee.cards.some((card) => card.id === secondCardId), false);
 });

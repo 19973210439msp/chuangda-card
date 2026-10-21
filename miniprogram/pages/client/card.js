@@ -32,6 +32,7 @@ Page({
     this.shareCard = options.shareCard || '';
     this.from = options.from || '';
     this.viewId = '';
+    this.viewToken = '';
     this.started = Date.now();
     if (options.collected === '1') {
       this.kept = true;
@@ -108,11 +109,12 @@ Page({
     request({
       url: '/api/analytics/view',
       method: 'POST',
-      data: { cardId: this.cardId, visitorId: visitorId() },
+      data: { cardId: this.cardId, shareCard: this.shareCard, visitorId: visitorId() },
       redirectOnAuth: false,
       auth: !!wx.getStorageSync('token'),
     }).then((data) => {
       this.viewId = data.viewId;
+      this.viewToken = data.updateToken || '';
       this.started = Date.now();
     }).catch(() => {
       this.starting = false;
@@ -125,7 +127,7 @@ Page({
     request({
       url: '/api/analytics/view/' + this.viewId,
       method: 'PUT',
-      data: { durationSec },
+      data: { updateToken: this.viewToken, durationSec },
       redirectOnAuth: false,
       auth: false,
     }).catch(() => {});
@@ -207,7 +209,7 @@ Page({
     request({
       url: '/api/analytics/view/' + this.viewId,
       method: 'PUT',
-      data: { exchange },
+      data: { updateToken: this.viewToken, exchange },
       redirectOnAuth: false,
       auth: false,
     }).then(() => {

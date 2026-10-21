@@ -7,6 +7,7 @@ Page({
     mode: 'switch',
     title: '切换名片',
     cards: [],
+    archivedCards: [],
     company: null,
     activeCardId: '',
     templates: [],
@@ -55,7 +56,7 @@ Page({
           },
         };
       });
-      const cards = (employee.cards || []).filter((card) => card.lifecycle !== 'archived').map((card) => ({
+      const allCards = (employee.cards || []).map((card) => ({
         ...card,
         brand: decorateCompany((me.cardCompanies || {})[card.id] || me.templateCompany),
         preview: {
@@ -70,8 +71,11 @@ Page({
           templateLabel: card.templateLabel,
         },
       }));
+      const cards = allCards.filter((card) => card.lifecycle !== 'archived');
+      const archivedCards = allCards.filter((card) => card.lifecycle === 'archived');
       this.setData({
         cards,
+        archivedCards,
         company: brand,
         activeCardId: employee.activeCardId || '',
         templates,
@@ -98,9 +102,12 @@ Page({
   onDelete(event) {
     const cardId = event.currentTarget.dataset.id;
     if (!cardId) return;
+    const archived = (this.data.archivedCards || []).some((card) => card.id === cardId);
     wx.showModal({
-      title: '删除这张名片',
-      content: '删除后不能恢复。删除最后一张后，账号将暂时没有可用名片。',
+      title: archived ? '永久删除归档名片' : '删除这张名片',
+      content: archived
+        ? '删除后不能恢复，原分享链接仍会保持失效。'
+        : '删除后不能恢复。删除最后一张后，账号将暂时没有可用名片。',
       confirmText: '删除',
       confirmColor: '#c82423',
       success: (res) => {

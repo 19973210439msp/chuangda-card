@@ -16,6 +16,17 @@
         <text class="meta">{{item.name || '未填写姓名'}}  {{item.phone || '未填手机号'}}</text>
       </view>
       <text class="desc" wx:if="{{!cards.length}}">还没有可切换的名片。</text>
+      <view class="archive-list" wx:if="{{archivedCards.length}}">
+        <text class="label">已归档名片</text>
+        <text class="desc">企业认证取消后，原分享链接已失效。可以永久删除这些历史名片。</text>
+        <view class="archive-item" wx:for="{{archivedCards}}" wx:key="id">
+          <view>
+            <text class="tpl">{{item.templateLabel}}</text>
+            <text class="meta">{{item.company || '未填写公司'}} · {{item.name || '未填写姓名'}}</text>
+          </view>
+          <text class="remove" data-id="{{item.id}}" catchtap="onDelete">永久删除</text>
+        </view>
+      </view>
     </block>
     <view class="create" wx:else>
       <text class="label">选择名片样式</text>

@@ -28,6 +28,14 @@ function invalidTemplate() {
   return err;
 }
 
+function assertActiveCardLimit(cards) {
+  if ((cards || []).filter((card) => card.lifecycle === 'active').length < 6) return;
+  const err = new Error('最多保存 6 张有效名片');
+  err.status = 400;
+  err.code = 'VALIDATION_ERROR';
+  throw err;
+}
+
 function normalizeCard(card, index, hasDefault) {
   const source = card || {};
   const template = validTemplate(source.template) ? source.template : 'classic';
@@ -45,7 +53,7 @@ function normalizeCard(card, index, hasDefault) {
     address: source.address || '',
     companyId: Object.prototype.hasOwnProperty.call(source, 'companyId')
       ? String(source.companyId || '')
-      : 'default',
+      : '',
     lifecycle: CARD_LIFECYCLES.has(source.lifecycle) ? source.lifecycle : 'active',
     source: source.source || 'legacy_unknown',
     attachments: (Array.isArray(source.attachments) ? source.attachments : [])
@@ -279,6 +287,7 @@ function writeCompanyTemplateCard(person, fields) {
   if (!validTemplate(template)) throw invalidTemplate();
   const existing = ready.cards.find((card) => card.companyId === companyId && card.template === template);
   if (existing) {
+    if (existing.lifecycle !== 'active') assertActiveCardLimit(ready.cards);
     const cards = ready.cards.map((card) => {
       if (card.id !== existing.id) return card;
       return cardFromFields({ ...card, ...fields, companyId }, {
@@ -291,6 +300,7 @@ function writeCompanyTemplateCard(person, fields) {
     });
     return projectActive({ ...ready, cards, activeCardId: existing.id });
   }
+  assertActiveCardLimit(ready.cards);
   const card = cardFromFields({ ...fields, companyId }, {
     id: newCardId(),
     template,
@@ -304,12 +314,7 @@ function writeCompanyTemplateCard(person, fields) {
 function addCard(person, template, options = {}) {
   const ready = ensureCards(person);
   if (!validTemplate(template)) throw invalidTemplate();
-  if (ready.cards.length >= 6) {
-    const err = new Error('最多保存 6 张名片');
-    err.status = 400;
-    err.code = 'VALIDATION_ERROR';
-    throw err;
-  }
+  assertActiveCardLimit(ready.cards);
   const source = activeCard(ready) || person || {};
   const companyId = Object.prototype.hasOwnProperty.call(options, 'companyId') ? String(options.companyId || '') : '';
   const card = cardFromFields({

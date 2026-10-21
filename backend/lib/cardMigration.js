@@ -1,12 +1,13 @@
 const CARD_LIFECYCLES = new Set(['draft', 'active', 'archived']);
 
-function normalizeLegacyCard(card) {
+function normalizeLegacyCard(card, index) {
   if (!card || typeof card !== 'object') return card;
   return {
     ...card,
+    id: card.id || ('card-' + index),
     companyId: Object.prototype.hasOwnProperty.call(card, 'companyId')
       ? String(card.companyId || '')
-      : 'default',
+      : '',
     lifecycle: CARD_LIFECYCLES.has(card.lifecycle) ? card.lifecycle : 'active',
     source: card.source || 'legacy_unknown',
   };

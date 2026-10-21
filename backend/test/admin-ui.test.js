@@ -64,3 +64,30 @@ test('success notice expires and clears when switching pages', async () => {
   assert.equal(vm.runInContext('state.notice', context), '');
   assert.equal(timer, null);
 });
+
+test('hq employee creation and import include a target company selector', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../admin-web/js/app.js'), 'utf8');
+  const page = { innerHTML: '', querySelector: () => null };
+  const context = vm.createContext({
+    document: { querySelector: (selector) => selector === '#app' ? page : null, addEventListener: () => {} },
+    window: { addEventListener: () => {} },
+    location: { hash: '#/cards' },
+    token: () => '',
+  });
+  vm.runInContext(source, context);
+  const employee = vm.runInContext(`
+    state.admin = { scope: 'hq' };
+    state.companies = [
+      { id: 'default', name: '总公司' },
+      { id: 'company-a', name: '子公司甲' },
+    ];
+    state.templates = [{ id: 'classic', name: '创大模板', companyIds: ['default', 'company-a'] }];
+    employeeDialog({ status: 'active', companyId: 'company-a', cardTemplate: 'classic' });
+  `, context);
+  assert.match(employee, /name="companyId"/);
+  assert.match(employee, /value="company-a" selected/);
+  const imported = vm.runInContext('importHtml()', context);
+  assert.match(imported, /名片归属企业/);
+  assert.doesNotThrow(() => vm.runInContext("assertTemplateAssignment('classic', 'company-a')", context));
+  assert.throws(() => vm.runInContext("assertTemplateAssignment('classic', 'company-b')", context), /未分配给目标企业/);
+});

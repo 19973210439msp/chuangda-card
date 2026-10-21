@@ -75,29 +75,6 @@ test('production cannot skip WeChat auth', () => {
   else process.env.SKIP_WECHAT_AUTH = previousSkip;
 });
 
-test('card access v2 is safe by default in production and can be enabled explicitly', () => {
-  const config = require('../config');
-  const previousNode = process.env.NODE_ENV;
-  const previousFlag = process.env.CARD_ACCESS_V2;
-  try {
-    process.env.NODE_ENV = 'production';
-    delete process.env.CARD_ACCESS_V2;
-    assert.equal(config.cardAccessV2Enabled(), false);
-    process.env.CARD_ACCESS_V2 = 'true';
-    assert.equal(config.cardAccessV2Enabled(), true);
-    process.env.CARD_ACCESS_V2 = 'false';
-    assert.equal(config.cardAccessV2Enabled(), false);
-    process.env.NODE_ENV = 'test';
-    delete process.env.CARD_ACCESS_V2;
-    assert.equal(config.cardAccessV2Enabled(), true);
-  } finally {
-    if (previousNode === undefined) delete process.env.NODE_ENV;
-    else process.env.NODE_ENV = previousNode;
-    if (previousFlag === undefined) delete process.env.CARD_ACCESS_V2;
-    else process.env.CARD_ACCESS_V2 = previousFlag;
-  }
-});
-
 test('card access audit reports migration risks without exposing card fields', () => {
   const { summarizeCardAccess } = require('../lib/cardAudit');
   const summary = summarizeCardAccess({

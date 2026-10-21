@@ -82,3 +82,23 @@
   border-color: #182850;
   background: #ffffff;
 }
+
+.archive-list {
+  margin-top: 36rpx;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  background: #ffffff;
+}
+
+.archive-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 20rpx 0;
+  border-top: 1rpx solid #e6e8ee;
+}
+
+.archive-item .meta {
+  display: block;
+}

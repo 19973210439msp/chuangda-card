@@ -4,6 +4,7 @@ const cardId = params.get('cardId') || '';
 const shareCard = params.get('shareCard') || '';
 const visitorKey = 'chuangda_visitor';
 let viewId = '';
+let viewToken = '';
 let started = Date.now();
 
 function esc(value) {
@@ -165,7 +166,7 @@ async function submitExchange(event, dialog) {
   const response = await fetch('/api/analytics/view/' + viewId, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ exchange: data, durationSec: Math.round((Date.now() - started) / 1000) }),
+    body: JSON.stringify({ updateToken: viewToken, exchange: data, durationSec: Math.round((Date.now() - started) / 1000) }),
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
@@ -190,11 +191,12 @@ async function track(active) {
   const response = await fetch('/api/analytics/view', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cardId, visitorId: visitorId() }),
+    body: JSON.stringify({ cardId, shareCard, visitorId: visitorId() }),
   });
   if (!response.ok) return;
   const data = await response.json();
   viewId = data.viewId;
+  viewToken = data.updateToken || '';
   started = Date.now();
 }
 
@@ -204,7 +206,7 @@ function reportDuration() {
   fetch('/api/analytics/view/' + viewId, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ durationSec }),
+    body: JSON.stringify({ updateToken: viewToken, durationSec }),
     keepalive: true,
   });
 }

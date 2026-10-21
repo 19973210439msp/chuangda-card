@@ -6,6 +6,7 @@ const {
   projectActive,
   reconcileActiveCard,
   addCard,
+  writeCompanyTemplateCard,
 } = require('../lib/cards');
 const { blankPerson, toCard } = require('../lib/person');
 const { publicCardState } = require('../lib/cardAccess');
@@ -69,6 +70,31 @@ test('the first real card can be created from a zero-card account', () => {
   assert.equal(saved.activeCardId, saved.cards[0].id);
 });
 
+test('archived cards do not consume the six active card limit', () => {
+  const archivedCards = Array.from({ length: 6 }, (_, index) => ({
+    id: 'archived-' + index,
+    template: 'classic',
+    lifecycle: 'archived',
+    isDefault: index === 0,
+    companyId: 'company-a',
+  }));
+  const person = blankPerson({ id: 'emp-archived-limit', cards: archivedCards });
+  const saved = addCard(person, 'classic', { companyId: 'company-a', company: '子公司甲' });
+  assert.equal(saved.cards.filter((card) => card.lifecycle === 'active').length, 1);
+  assert.equal(saved.cards.length, 7);
+
+  const sixActive = blankPerson({
+    id: 'emp-active-limit',
+    cards: archivedCards.map((card) => ({ ...card, lifecycle: 'active' })),
+  });
+  assert.throws(
+    () => writeCompanyTemplateCard(sixActive, {
+      companyId: 'company-b', company: '子公司乙', cardTemplate: 'tpl-company-b',
+    }),
+    /最多保存 6 张有效名片/,
+  );
+});
+
 test('public card state distinguishes no card, archived card and inactive account', () => {
   const empty = blankPerson({ id: 'emp-empty-public', cards: [] });
   assert.equal(publicCardState(empty).code, 'NO_ACTIVE_CARD');
@@ -84,6 +110,12 @@ test('public card state distinguishes no card, archived card and inactive accoun
 
   const inactive = { ...empty, status: 'disabled' };
   assert.equal(publicCardState(inactive).code, 'CARD_UNAVAILABLE');
+
+  const unassigned = blankPerson({
+    id: 'emp-unassigned', activeCardId: 'card-unassigned',
+    cards: [{ id: 'card-unassigned', template: 'classic', lifecycle: 'active', companyId: '' }],
+  });
+  assert.equal(publicCardState(unassigned).code, 'CARD_UNASSIGNED');
 });
 
 test('legacy card migration persists lifecycle and source without inventing a card', async () => {
@@ -92,7 +124,8 @@ test('legacy card migration persists lifecycle and source without inventing a ca
     cards: [{ id: 'card-old', template: 'classic', isDefault: true, name: '存量员工' }],
   };
   const migrated = migratedPerson(legacy);
-  assert.equal(migrated.cards[0].companyId, 'default');
+  assert.equal(migrated.cards[0].companyId, '');
+  assert.ok(migrated.cards[0].id);
   assert.equal(migrated.cards[0].lifecycle, 'active');
   assert.equal(migrated.cards[0].source, 'legacy_unknown');
 

@@ -197,6 +197,23 @@ function templateName(id) {
   return found ? found[1] : '暂无可用模板';
 }
 
+function targetCompanyField(name, selected) {
+  if (state.admin && state.admin.scope === 'company') {
+    return `<input type="hidden" name="${name}" value="${esc(state.admin.companyId || '')}">`;
+  }
+  const current = selected || 'default';
+  return `<div><label for="${name}">名片归属企业</label><select id="${name}" name="${name}" required>
+    ${(state.companies || []).map((item) => `<option value="${esc(item.id)}" ${item.id === current ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}
+  </select></div>`;
+}
+
+function assertTemplateAssignment(templateId, companyId) {
+  const template = (state.templates || []).find((item) => item.id === templateId);
+  if (!template || !(template.companyIds || []).includes(companyId)) {
+    throw new Error('所选模板未分配给目标企业，请重新选择');
+  }
+}
+
 function templateChooser(name, selected) {
   const current = cardTemplateId(selected);
   if (!current) return '<p class="banner" role="status">当前企业没有可用模板，请联系总部管理员发放。</p><input type="hidden" name="' + name + '" value="">';
@@ -309,6 +326,7 @@ function importHtml() {
     <form class="panel" data-form="batch">
       <h3>批量导入</h3>
       <p class="lede">可粘贴表格，或选择 xlsx、xls、csv、docx 文件。Word 请把内容放在表格里，第一行写表头。表头为：姓名、职位、手机号、邮箱、公司、地址。手机号必填。这一批名片使用选中的模板。同一公司、同一模板、同一手机号会更新原名片；换一个模板会另外新建一张。</p>
+      ${targetCompanyField('companyId', 'default')}
       ${templateChooser('cardTemplate', '')}
       <label for="batch">导入内容</label>
       <textarea id="batch" name="list" placeholder="姓名,职位,手机号,邮箱,二维码,公司,地址"></textarea>
@@ -418,7 +436,7 @@ function employeeDialog(item) {
         <p class="lede">${item.id ? '用下拉框选择要编辑的名片。保存只写入当前这一张。' : '先选择名片模板，再填写这张名片的内容。'}</p>
         <input type="hidden" name="id" value="${esc(item.id || '')}">
         <input type="hidden" name="cardId" value="${esc(item.editingCardId || '')}">
-        ${item.id ? picker : templateChooser('cardTemplate', item.cardTemplate)}
+        ${item.id ? picker : targetCompanyField('companyId', item.companyId || 'default') + templateChooser('cardTemplate', item.cardTemplate)}
         <div class="grid-2">
           <div>${field('name', '姓名', item.name)}</div>
           ${state.admin && state.admin.scope === 'company' ? '' : `<div>${field('department', '部门', item.department)}</div>`}
@@ -639,6 +657,12 @@ async function loadView(view) {
     ]);
     state.employees = employees.items;
     state.companies = (companies && companies.items) || [];
+  } else if (view === 'import') {
+    if (state.admin.scope === 'company') {
+      state.companies = [{ id: state.admin.companyId, name: '当前企业' }];
+    } else {
+      state.companies = (await api('/api/companies')).items || [];
+    }
   } else if (view === 'brand') {
     state.company = (await api('/api/company' + companyQuery)).company;
   } else if (view === 'templates') {
@@ -758,6 +782,7 @@ async function saveEmployee(form) {
   const card = (state.editing && state.editing.cards || []).find((entry) => entry.id === data.cardId);
   const requirePhone = !data.cardId || !card || card.isDefault;
   if (requirePhone && !String(data.phone || '').trim()) throw new Error('创大产控模板的手机号不能为空');
+  if (!id) assertTemplateAssignment(data.cardTemplate, data.companyId);
   if (id) await api('/api/employees/' + id, { method: 'PUT', body: data });
   else await api('/api/employees', { method: 'POST', body: data });
   state.editing = null;
@@ -796,16 +821,19 @@ document.addEventListener('submit', async (event) => {
       const file = fileInput && fileInput.files && fileInput.files[0];
       const lowerName = file ? (file.name || '').toLowerCase() : '';
       const cardTemplate = formData(form).cardTemplate || '';
+      const companyId = formData(form).companyId || '';
       if (!cardTemplate) throw new Error('当前企业没有可用模板，请联系总部管理员发放');
+      assertTemplateAssignment(cardTemplate, companyId);
       let result;
       if (file && !/\.(csv|txt|tsv)$/.test(lowerName)) {
         const body = new FormData();
         body.append('file', file);
         body.append('cardTemplate', cardTemplate);
+        body.append('companyId', companyId);
         result = await api('/api/employees/import-file', { method: 'POST', form: body });
       } else {
         const list = parseImportTable(formData(form).list);
-        result = await api('/api/employees/batch', { method: 'POST', body: { list, cardTemplate } });
+        result = await api('/api/employees/batch', { method: 'POST', body: { list, cardTemplate, companyId } });
       }
       state.importIssues = result.rejected || [];
       const failed = state.importIssues.length;
@@ -976,6 +1004,7 @@ document.addEventListener('click', async (event) => {
       state.editing = {
         status: 'active',
         cardTemplate: initialTemplate,
+        companyId: 'default',
         company: state.company ? state.company.name : '创大产控集团',
       };
       paint();
