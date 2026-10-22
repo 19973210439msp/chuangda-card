@@ -428,6 +428,25 @@ const store = {
       return row;
     });
   },
+  async reserveCode(row, { userId, channel, since }) {
+    return mutate((data) => {
+      const blocked = data.codes.some((item) => (
+        item.channel === channel
+        && item.createdAt >= since
+        && item.userId === userId
+      ));
+      if (blocked) return false;
+      data.codes.push(row);
+      return true;
+    });
+  },
+  async deleteCode(id) {
+    return mutate((data) => {
+      const before = data.codes.length;
+      data.codes = data.codes.filter((row) => row.id !== id);
+      return before !== data.codes.length;
+    });
+  },
   async findActiveCode({ userId, channel, target, now }) {
     const data = await snapshot();
     return data.codes

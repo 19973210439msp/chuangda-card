@@ -1,80 +1,59 @@
-const crypto = require('crypto');
+const Dysmsapi = require('@alicloud/dysmsapi20170525');
+const OpenApi = require('@alicloud/openapi-client');
 const { httpError } = require('./errors');
 
-// 腾讯云短信 SendSms，版本 2021-01-11。
-// https://cloud.tencent.com/document/product/382/55981
 const SMS_KEYS = [
-  'TENCENT_SECRET_ID',
-  'TENCENT_SECRET_KEY',
-  'TENCENT_SMS_SDK_APP_ID',
-  'TENCENT_SMS_SIGN_NAME',
-  'TENCENT_SMS_TEMPLATE_ID',
+  'ALIBABA_CLOUD_ACCESS_KEY_ID',
+  'ALIBABA_CLOUD_ACCESS_KEY_SECRET',
+  'ALIYUN_SMS_SIGN_NAME',
+  'ALIYUN_SMS_TEMPLATE_CODE',
 ];
 
 function smsReady() {
   return SMS_KEYS.every((key) => (process.env[key] || '').trim());
 }
 
-function sha256hex(message) {
-  return crypto.createHash('sha256').update(message).digest('hex');
+function templateParam(code) {
+  return JSON.stringify({ code: String(code) });
 }
 
-function hmac(key, message) {
-  return crypto.createHmac('sha256', key).update(message).digest();
-}
-
-function templateParams(code) {
-  const params = [String(code)];
-  const minutes = (process.env.TENCENT_SMS_EXPIRE_MINUTES || '').trim();
-  if (minutes) params.push(minutes);
-  return params;
+function createClient() {
+  const config = new OpenApi.Config({
+    accessKeyId: process.env.ALIBABA_CLOUD_ACCESS_KEY_ID.trim(),
+    accessKeySecret: process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET.trim(),
+    endpoint: (process.env.ALIYUN_SMS_ENDPOINT || 'dysmsapi.aliyuncs.com').trim(),
+  });
+  return new Dysmsapi.default(config);
 }
 
 async function sendVerificationSms(phone, code) {
   if (!smsReady()) throw httpError(503, 'SMS_NOT_CONFIGURED', '短信服务未配置');
-  const secretId = process.env.TENCENT_SECRET_ID.trim();
-  const secretKey = process.env.TENCENT_SECRET_KEY.trim();
-  const service = 'sms';
-  const host = 'sms.tencentcloudapi.com';
-  const action = 'SendSms';
-  const version = '2021-01-11';
-  const region = (process.env.TENCENT_SMS_REGION || 'ap-guangzhou').trim();
-  const timestamp = Math.floor(Date.now() / 1000);
-  const date = new Date(timestamp * 1000).toISOString().slice(0, 10);
-  const payload = JSON.stringify({
-    PhoneNumberSet: ['+86' + phone],
-    SmsSdkAppId: process.env.TENCENT_SMS_SDK_APP_ID.trim(),
-    SignName: process.env.TENCENT_SMS_SIGN_NAME.trim(),
-    TemplateId: process.env.TENCENT_SMS_TEMPLATE_ID.trim(),
-    TemplateParamSet: templateParams(code),
+  const request = new Dysmsapi.SendSmsRequest({
+    phoneNumbers: String(phone),
+    signName: process.env.ALIYUN_SMS_SIGN_NAME.trim(),
+    templateCode: process.env.ALIYUN_SMS_TEMPLATE_CODE.trim(),
+    templateParam: templateParam(code),
   });
-  const canonicalHeaders = `content-type:application/json; charset=utf-8\nhost:${host}\n`;
-  const signedHeaders = 'content-type;host';
-  const canonicalRequest = ['POST', '/', '', canonicalHeaders, signedHeaders, sha256hex(payload)].join('\n');
-  const credentialScope = `${date}/${service}/tc3_request`;
-  const stringToSign = ['TC3-HMAC-SHA256', String(timestamp), credentialScope, sha256hex(canonicalRequest)].join('\n');
-  const signingKey = hmac(hmac(hmac('TC3' + secretKey, date), service), 'tc3_request');
-  const signature = crypto.createHmac('sha256', signingKey).update(stringToSign).digest('hex');
-  const authorization = `TC3-HMAC-SHA256 Credential=${secretId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
-  const response = await fetch('https://' + host, {
-    method: 'POST',
-    headers: {
-      Authorization: authorization,
-      'Content-Type': 'application/json; charset=utf-8',
-      'X-TC-Action': action,
-      'X-TC-Version': version,
-      'X-TC-Timestamp': String(timestamp),
-      'X-TC-Region': region,
-    },
-    body: payload,
-  });
-  const data = await response.json();
-  const error = data && data.Response && data.Response.Error;
-  if (error) throw httpError(502, 'SMS_FAILED', error.Message || '短信发送失败');
-  const status = data && data.Response && data.Response.SendStatusSet && data.Response.SendStatusSet[0];
-  if (!status || status.Code !== 'Ok') {
-    throw httpError(502, 'SMS_FAILED', (status && status.Message) || '短信发送失败');
+
+  try {
+    const response = await createClient().sendSms(request);
+    const body = response && response.body;
+    if (!body || body.code !== 'OK') {
+      console.error('[sms] Aliyun rejected SendSms', {
+        code: body && body.code,
+        message: body && body.message,
+        requestId: body && body.requestId,
+      });
+      throw httpError(502, 'SMS_FAILED', '短信发送失败，请稍后重试');
+    }
+  } catch (error) {
+    if (error && error.code === 'SMS_FAILED') throw error;
+    console.error('[sms] Aliyun SendSms request failed', {
+      code: error && error.code,
+      message: error && error.message,
+    });
+    throw httpError(502, 'SMS_FAILED', '短信发送失败，请稍后重试');
   }
 }
 
-module.exports = { smsReady, sendVerificationSms, templateParams };
+module.exports = { smsReady, sendVerificationSms, templateParam };

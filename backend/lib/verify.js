@@ -1,9 +1,8 @@
 const crypto = require('crypto');
 const { httpError } = require('./errors');
 
-const TTL_MS = 10 * 60 * 1000;
-const WINDOW_MS = 10 * 60 * 1000;
-const MAX_IN_WINDOW = 5;
+const TTL_MS = 5 * 60 * 1000;
+const WINDOW_MS = 60 * 1000;
 const MAX_FAILED_ATTEMPTS = 5;
 
 function hashCode(code) {
@@ -14,12 +13,8 @@ function randomCode() {
   return String(crypto.randomInt(0, 1000000)).padStart(6, '0');
 }
 
-async function issueCode(store, { userId, channel, target, includeDevCode }) {
+async function issueCode(store, { userId, channel, target, includeDevCode, deliver }) {
   const since = new Date(Date.now() - WINDOW_MS).toISOString();
-  const recent = await store.countRecentCodes({ userId, channel, since });
-  if (recent >= MAX_IN_WINDOW) {
-    throw httpError(429, 'CODE_RATE_LIMIT', '验证码发送过于频繁，请稍后再试');
-  }
   const code = randomCode();
   const row = {
     id: 'code-' + crypto.randomBytes(6).toString('hex'),
@@ -32,7 +27,16 @@ async function issueCode(store, { userId, channel, target, includeDevCode }) {
     failedAttempts: 0,
     createdAt: new Date().toISOString(),
   };
-  await store.insertCode(row);
+  const reserved = await store.reserveCode(row, { userId, channel, since });
+  if (!reserved) {
+    throw httpError(429, 'CODE_RATE_LIMIT', '验证码每分钟只能发送一次');
+  }
+  try {
+    if (deliver) await deliver(code);
+  } catch (error) {
+    await store.deleteCode(row.id);
+    throw error;
+  }
   const expose = includeDevCode !== undefined ? includeDevCode : process.env.NODE_ENV !== 'production';
   const body = { sent: true, channel, target };
   if (expose) body.devCode = code;

@@ -14,9 +14,10 @@ process.env.ADMIN_PASS = 'admin123';
 delete process.env.DATABASE_URL;
 process.env.TENCENT_SECRET_ID = '';
 process.env.TENCENT_SECRET_KEY = '';
-process.env.TENCENT_SMS_SDK_APP_ID = '';
-process.env.TENCENT_SMS_SIGN_NAME = '';
-process.env.TENCENT_SMS_TEMPLATE_ID = '';
+process.env.ALIBABA_CLOUD_ACCESS_KEY_ID = '';
+process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET = '';
+process.env.ALIYUN_SMS_SIGN_NAME = '';
+process.env.ALIYUN_SMS_TEMPLATE_CODE = '';
 process.env.OCR_PROVIDER = 'tencent';
 process.env.LOGIN_FAIL_LIMIT = '5';
 process.env.LOGIN_LOCK_MS = '200';
@@ -125,6 +126,13 @@ test('employee card, holder, account and analytics', async () => {
   });
   assert.equal(sms.status, 200);
   assert.match(sms.json.devCode, /^\d{6}$/);
+  const repeatedSms = await api('/api/account/phone/code', {
+    method: 'POST',
+    token,
+    body: { phone: '13811113333' },
+  });
+  assert.equal(repeatedSms.status, 429);
+  assert.equal(repeatedSms.json.error.code, 'CODE_RATE_LIMIT');
   const phoneSaved = await api('/api/account/phone', {
     method: 'PUT',
     token,

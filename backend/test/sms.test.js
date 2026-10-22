@@ -1,25 +1,23 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { smsReady, sendVerificationSms, templateParams } = require('../lib/sms');
+const Dysmsapi = require('@alicloud/dysmsapi20170525');
+const { smsReady, sendVerificationSms, templateParam } = require('../lib/sms');
 
 function withSmsEnv(extra, fn) {
   const keys = [
-    'TENCENT_SECRET_ID',
-    'TENCENT_SECRET_KEY',
-    'TENCENT_SMS_SDK_APP_ID',
-    'TENCENT_SMS_SIGN_NAME',
-    'TENCENT_SMS_TEMPLATE_ID',
-    'TENCENT_SMS_EXPIRE_MINUTES',
-    'TENCENT_SMS_REGION',
+    'ALIBABA_CLOUD_ACCESS_KEY_ID',
+    'ALIBABA_CLOUD_ACCESS_KEY_SECRET',
+    'ALIYUN_SMS_SIGN_NAME',
+    'ALIYUN_SMS_TEMPLATE_CODE',
+    'ALIYUN_SMS_ENDPOINT',
   ];
   const previous = keys.map((key) => [key, process.env[key]]);
   for (const key of keys) delete process.env[key];
   Object.assign(process.env, {
-    TENCENT_SECRET_ID: 'AKIDtest',
-    TENCENT_SECRET_KEY: 'secret',
-    TENCENT_SMS_SDK_APP_ID: '1400006666',
-    TENCENT_SMS_SIGN_NAME: '创大产控',
-    TENCENT_SMS_TEMPLATE_ID: '1110',
+    ALIBABA_CLOUD_ACCESS_KEY_ID: 'LTAItest',
+    ALIBABA_CLOUD_ACCESS_KEY_SECRET: 'secret',
+    ALIYUN_SMS_SIGN_NAME: '创大产控',
+    ALIYUN_SMS_TEMPLATE_CODE: 'SMS_123456789',
   }, extra);
   return Promise.resolve()
     .then(fn)
@@ -31,55 +29,42 @@ function withSmsEnv(extra, fn) {
     });
 }
 
-test('sms stays on the test code until the Tencent SMS app is configured', () => {
-  const previous = process.env.TENCENT_SMS_SDK_APP_ID;
-  delete process.env.TENCENT_SMS_SDK_APP_ID;
+test('sms stays disabled until the Aliyun SMS settings are complete', () => withSmsEnv({
+  ALIYUN_SMS_TEMPLATE_CODE: '',
+}, () => {
   assert.equal(smsReady(), false);
-  if (previous === undefined) delete process.env.TENCENT_SMS_SDK_APP_ID;
-  else process.env.TENCENT_SMS_SDK_APP_ID = previous;
-});
+}));
 
-test('verification SMS uses E.164 and only returns success when Tencent says Ok', () => withSmsEnv({}, async () => {
-  assert.deepEqual(templateParams('123456'), ['123456']);
-  const original = global.fetch;
-  let body;
-  global.fetch = async (_url, options) => {
-    body = JSON.parse(options.body);
-    assert.equal(options.headers['X-TC-Action'], 'SendSms');
-    assert.equal(options.headers['X-TC-Version'], '2021-01-11');
-    return {
-      json: async () => ({ Response: { SendStatusSet: [{ Code: 'Ok', Message: 'send success' }] } }),
-    };
+test('verification SMS sends the approved Aliyun template with a six-digit code', () => withSmsEnv({}, async () => {
+  assert.equal(templateParam('123456'), JSON.stringify({ code: '123456' }));
+  const original = Dysmsapi.default.prototype.sendSms;
+  let request;
+  Dysmsapi.default.prototype.sendSms = async (input) => {
+    request = input;
+    return { body: { code: 'OK', message: 'OK', bizId: 'aliyun-biz-id' } };
   };
   try {
     await sendVerificationSms('13800138000', '123456');
-    assert.deepEqual(body.PhoneNumberSet, ['+8613800138000']);
-    assert.equal(body.SmsSdkAppId, '1400006666');
-    assert.equal(body.SignName, '创大产控');
-    assert.equal(body.TemplateId, '1110');
-    assert.deepEqual(body.TemplateParamSet, ['123456']);
+    assert.equal(request.phoneNumbers, '13800138000');
+    assert.equal(request.signName, '创大产控');
+    assert.equal(request.templateCode, 'SMS_123456789');
+    assert.equal(request.templateParam, JSON.stringify({ code: '123456' }));
   } finally {
-    global.fetch = original;
+    Dysmsapi.default.prototype.sendSms = original;
   }
 }));
 
-test('a two-variable template sends the code and the expiry minutes', () => withSmsEnv({
-  TENCENT_SMS_EXPIRE_MINUTES: '10',
-}, () => {
-  assert.deepEqual(templateParams('654321'), ['654321', '10']);
-}));
-
-test('Tencent SMS rejection is returned to the caller', () => withSmsEnv({}, async () => {
-  const original = global.fetch;
-  global.fetch = async () => ({
-    json: async () => ({ Response: { SendStatusSet: [{ Code: 'FailedOperation.SignatureIncorrectOrUnapproved', Message: '签名未审核' }] } }),
+test('Aliyun SMS rejection is returned to the caller', () => withSmsEnv({}, async () => {
+  const original = Dysmsapi.default.prototype.sendSms;
+  Dysmsapi.default.prototype.sendSms = async () => ({
+    body: { code: 'isv.SMS_SIGNATURE_ILLEGAL', message: '签名未审核' },
   });
   try {
     await assert.rejects(
       () => sendVerificationSms('13800138000', '123456'),
-      (err) => err.code === 'SMS_FAILED' && err.message === '签名未审核',
+      (err) => err.code === 'SMS_FAILED' && err.message === '短信发送失败，请稍后重试',
     );
   } finally {
-    global.fetch = original;
+    Dysmsapi.default.prototype.sendSms = original;
   }
 }));

@@ -653,6 +653,40 @@ const store = {
     );
     return row;
   },
+  async reserveCode(row, { userId, channel, since }) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`sms-user:${channel}:${userId}`]);
+      const existing = await client.query(
+        `SELECT 1 FROM verify_codes
+         WHERE channel = $1 AND created_at >= $2
+           AND user_id = $3
+         LIMIT 1`,
+        [channel, since, userId]
+      );
+      if (existing.rowCount) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+      await client.query(
+        `INSERT INTO verify_codes (id, user_id, channel, target, code_hash, expires_at, used, failed_attempts, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [row.id, row.userId, row.channel, row.target, row.codeHash, row.expiresAt, row.used, row.failedAttempts || 0, row.createdAt]
+      );
+      await client.query('COMMIT');
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+  async deleteCode(id) {
+    const result = await query('DELETE FROM verify_codes WHERE id = $1', [id]);
+    return result.rowCount > 0;
+  },
   async findActiveCode({ userId, channel, target, now }) {
     const result = await query(
       `SELECT id, user_id, channel, target, code_hash, expires_at, used, failed_attempts, created_at

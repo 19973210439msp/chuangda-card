@@ -85,7 +85,7 @@ async function resolveChangePhone(body) {
   const smsCode = text(body && body.code, 16);
   const typed = normalizePhone(body && body.phone);
 
-  // 优先微信手机号授权；短信仅保留给自动化测试兼容
+  // 优先微信手机号授权；用户手动换号时也支持阿里云短信验证。
   if (wechatCode && !smsCode) {
     return phoneFromWechatCode(wechatCode);
   }

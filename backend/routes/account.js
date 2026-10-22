@@ -38,8 +38,8 @@ router.post('/phone/code', asyncRoute(async (req, res) => {
     channel: 'sms',
     target: phone,
     includeDevCode: !ready,
+    deliver: ready ? (code) => sendVerificationSms(phone, code) : undefined,
   });
-  if (ready) await sendVerificationSms(phone, issued.code);
   res.json(issued.body);
 }));
 
