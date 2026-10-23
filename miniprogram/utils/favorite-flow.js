@@ -17,4 +17,18 @@ function sharedCardPath(cardId, shareCardId, collected) {
   return path;
 }
 
-module.exports = { favoritePayload, sharedCardPath };
+function holderCardPath(cardId, shareCardId) {
+  return sharedCardPath(cardId, shareCardId, false) + '&from=holder';
+}
+
+function cardDetailRequest(cardId, shareCardId, from) {
+  const shared = value(shareCardId);
+  const query = shared ? '?shareCard=' + encodeURIComponent(shared) : '';
+  return {
+    url: '/api/cards/' + encodeURIComponent(value(cardId)) + query,
+    redirectOnAuth: false,
+    auth: value(from) === 'holder',
+  };
+}
+
+module.exports = { favoritePayload, sharedCardPath, holderCardPath, cardDetailRequest };

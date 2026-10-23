@@ -1,7 +1,12 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { emptyCardState } = require('../../miniprogram/utils/card-home-state');
-const { favoritePayload, sharedCardPath } = require('../../miniprogram/utils/favorite-flow');
+const {
+  favoritePayload,
+  sharedCardPath,
+  holderCardPath,
+  cardDetailRequest,
+} = require('../../miniprogram/utils/favorite-flow');
 
 test('zero-card home guides the employee according to certification and templates', () => {
   assert.equal(emptyCardState({}).kind, 'uncertified');
@@ -27,4 +32,25 @@ test('favorite flow preserves the exact shared card and only reports a confirmed
     sharedCardPath('employee-1', 'card-2', false),
     '/pages/client/card?cardId=employee-1&shareCard=card-2',
   );
+});
+
+test('holder card flow keeps the exact card and authenticates owner-only OCR details', () => {
+  assert.equal(
+    holderCardPath('employee-1', 'card-2'),
+    '/pages/client/card?cardId=employee-1&shareCard=card-2&from=holder',
+  );
+  assert.equal(
+    holderCardPath('ocr-1', ''),
+    '/pages/client/card?cardId=ocr-1&from=holder',
+  );
+  assert.deepEqual(cardDetailRequest('ocr-1', '', 'holder'), {
+    url: '/api/cards/ocr-1',
+    redirectOnAuth: false,
+    auth: true,
+  });
+  assert.deepEqual(cardDetailRequest('employee-1', 'card-2', ''), {
+    url: '/api/cards/employee-1?shareCard=card-2',
+    redirectOnAuth: false,
+    auth: false,
+  });
 });

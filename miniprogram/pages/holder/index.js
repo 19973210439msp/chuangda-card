@@ -2,6 +2,7 @@ const { request } = require('../../utils/request');
 const { ensureLogin } = require('../../utils/guard');
 const { pageScrollHeight } = require('../../utils/util');
 const { compareByPinyin } = require('../../utils/pinyin');
+const { holderCardPath } = require('../../utils/favorite-flow');
 
 const PIN_KEY = 'holderPins';
 
@@ -106,8 +107,9 @@ Page({
       this.setData({ items });
       return;
     }
-    const id = event.currentTarget.dataset.id;
-    wx.navigateTo({ url: '/pages/client/card?cardId=' + id + '&from=holder' });
+    const item = this.data.items[index];
+    if (!item) return;
+    wx.navigateTo({ url: holderCardPath(item.cardId, item.shareCardId) });
   },
   onPin(event) {
     const id = event.currentTarget.dataset.id;

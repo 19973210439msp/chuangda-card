@@ -1,6 +1,6 @@
 const { request } = require('../../utils/request');
 const { decorateCard, decorateCompany, visitorId, pageScrollHeight } = require('../../utils/util');
-const { favoritePayload } = require('../../utils/favorite-flow');
+const { favoritePayload, cardDetailRequest } = require('../../utils/favorite-flow');
 
 function contactClient() {
   let info = {};
@@ -44,9 +44,8 @@ Page({
       this.setData({ error: '缺少名片编号' });
       return;
     }
-    const query = this.shareCard ? '?shareCard=' + encodeURIComponent(this.shareCard) : '';
     Promise.all([
-      request({ url: '/api/cards/' + this.cardId + query, redirectOnAuth: false, auth: false }),
+      request(cardDetailRequest(this.cardId, this.shareCard, this.from)),
       request({ url: '/api/company', redirectOnAuth: false, auth: false }),
     ]).then(([data, company]) => {
       this.setData({
