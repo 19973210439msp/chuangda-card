@@ -9,7 +9,6 @@ Page({
     companies: [],
     companyNames: [],
     companyIndex: 0,
-    certCode: '',
     certified: [],
     pending: [],
     companyOpen: false,
@@ -40,7 +39,6 @@ Page({
       companyIndex: 0,
       certified: cert.certified || [],
       pending: cert.pending || [],
-      certCode: '',
       error: '',
     });
   },
@@ -59,25 +57,28 @@ Page({
       companyOpen: false,
     });
   },
-  onCertCode(event) {
-    this.setData({ certCode: String(event.detail.value || '').replace(/\s/g, '').slice(0, 12) });
-  },
   onApplyCert() {
-    const code = String(this.data.certCode || '').trim();
     const picked = (this.data.companies || [])[this.data.companyIndex];
-    if (!code && !picked) {
-      this.setData({ error: '请选择企业或填写认证码' });
+    if (!picked) {
+      this.setData({ error: '请选择企业' });
       return;
     }
     request({
       url: '/api/employee/certification',
       method: 'POST',
-      data: { companyId: code ? '' : picked.id, code },
+      data: { companyId: picked.id },
     }).then((result) => request({
       url: '/api/employee/certification',
-    }).then((cert) => ({ cert, alreadyPending: !!(result && result.alreadyPending) }))).then(({ cert, alreadyPending }) => {
+    }).then((cert) => ({
+      cert,
+      alreadyPending: !!(result && result.alreadyPending),
+      autoApproved: !!(result && result.autoApproved),
+    }))).then(({ cert, alreadyPending, autoApproved }) => {
       this.showCert(this.data.allCompanies || [], cert || {});
-      wx.showToast({ title: alreadyPending ? '管理员正在审核中' : '已提交认证', icon: 'none' });
+      wx.showToast({
+        title: autoApproved ? '认证成功' : (alreadyPending ? '管理员正在审核中' : '已提交认证'),
+        icon: 'none',
+      });
     }).catch((err) => this.setData({ error: err.message }));
   },
 });

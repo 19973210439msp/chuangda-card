@@ -12,20 +12,18 @@
         <text class="label">审核中</text>
         <text class="company-line" wx:for="{{pending}}" wx:key="companyId">{{item.companyName}}</text>
       </block>
-      <text class="label">选择子公司</text>
+      <text class="label">选择企业</text>
       <view class="company-pick" bindtap="onOpenCompanies">
-        <text class="company-pick-text">{{companyNames[companyIndex] || '暂无可选子公司'}}</text>
+        <text class="company-pick-text">{{companyNames[companyIndex] || '暂无可选企业'}}</text>
         <text class="company-pick-more">查看</text>
       </view>
-      <text class="label">认证码</text>
-      <input class="input cert-code" always-embed="{{true}}" adjust-position="{{true}}" cursor-spacing="120" maxlength="12" value="{{certCode}}" bindinput="onCertCode" placeholder="填写管理员给的认证码" placeholder-class="ph" />
       <button class="primary" bindtap="onApplyCert">申请认证</button>
     </view>
   </view>
 </scroll-view>
 <view class="company-mask" wx:if="{{companyOpen}}" bindtap="onCloseCompanies" catchtouchmove="onHoldCompanies">
   <view class="company-sheet" catchtap="onHoldCompanies">
-    <text class="company-sheet-title">选择子公司</text>
+    <text class="company-sheet-title">选择企业</text>
     <scroll-view class="company-list" scroll-y>
       <view
         class="company-option {{companyIndex === index ? 'on' : ''}}"

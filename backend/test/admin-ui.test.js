@@ -113,3 +113,12 @@ test('employee removal copy distinguishes permanent deletion from company author
   assert.doesNotMatch(company.confirm, /永久删除|全部名片/);
   assert.match(company.success, /已移除本公司授权/);
 });
+
+test('certification interfaces do not expose certification codes', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../admin-web/js/app.js'), 'utf8');
+  const certScript = fs.readFileSync(path.join(__dirname, '../../miniprogram/pages/mine/cert.js'), 'utf8');
+  const certMarkup = fs.readFileSync(path.join(__dirname, '../../miniprogram/pages/mine/cert.wxml'), 'utf8');
+  assert.doesNotMatch(source, /certCode|认证码/);
+  assert.doesNotMatch(certScript, /certCode|onCertCode|认证码/);
+  assert.doesNotMatch(certMarkup, /certCode|onCertCode|认证码/);
+});

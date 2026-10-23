@@ -14,7 +14,6 @@ const { claimImportedCard } = require('./lib/claim');
 const { saveSelfCard, rememberOpenAccount } = require('./lib/contact');
 const { writeDefault, writeCard, writeCompanyTemplateCard, removeCard, archiveCard, archiveCompanyCards, addCard, switchTo, ensureCards, projectCard, projectActive } = require('./lib/cards');
 const { publicCardState } = require('./lib/cardAccess');
-const { makeCertCode, hideCertCode } = require('./lib/certify');
 const { allTemplates, listTemplates, visibleTemplates, templateGrantedTo, setBuiltInAssignments, createTemplate, companyForTemplate } = require('./lib/templates');
 const { listCertifications, saveCertification, approvedCompanyIds, migrateLegacyCertifications } = require('./lib/certifications');
 const { migrateCardRecords } = require('./lib/cardMigration');
@@ -39,6 +38,13 @@ const {
 const { clientIp, assertLoginAllowed, recordLoginFailure, recordLoginSuccess } = require('./lib/loginLock');
 const { applyCors } = require('./lib/cors');
 const { validatedFileType } = require('./lib/fileType');
+const {
+  reviewTestMode,
+  reviewCompanyVisible,
+  isReviewCompany,
+  stripCertificationCode,
+  syncReviewTestEnvironment,
+} = require('./lib/reviewTest');
 
 let store;
 try {
@@ -51,6 +57,7 @@ try {
 const ready = store.ready().then(async () => {
   await migrateLegacyCertifications(store);
   await migrateCardRecords(store);
+  await syncReviewTestEnvironment(store, seedData().company);
 });
 const app = express();
 app.set('trust proxy', 1);
@@ -88,7 +95,7 @@ app.use(asyncRoute(async (req, res, next) => {
   }
   if (session.role === 'admin' && session.userId && session.userId !== 'admin') {
     const admin = await store.getAdmin(session.userId);
-    if (!admin || admin.passwordHash !== session.secretStamp) {
+    if (!admin || admin.passwordHash !== session.secretStamp || (admin.reviewOnly && !reviewTestMode())) {
       await store.deleteSession(token);
       return next();
     }
@@ -357,30 +364,22 @@ async function allowedCardTemplate(templateId, admin, companyId) {
   return selected;
 }
 
-async function companiesWithCodes() {
-  const items = await store.listCompanies();
-  const used = new Set(items.map((item) => item.certCode).filter(Boolean));
-  const next = [];
-  for (const item of items) {
-    if (item.certCode) {
-      next.push(item);
-      continue;
-    }
-    let code = '';
-    do { code = makeCertCode(); } while (used.has(code));
-    used.add(code);
-    const { id, ...rest } = item;
-    const saved = { ...rest, certCode: code };
-    await store.saveCompanyRecord(id, saved);
-    next.push({ id, ...saved });
-  }
-  return next;
+async function managedCompanies() {
+  return (await store.listCompanies())
+    .filter(reviewCompanyVisible)
+    .map(stripCertificationCode);
+}
+
+function publicCompany(company) {
+  if (!company) return company;
+  const { cardTemplates, reviewOnly, ...rest } = stripCertificationCode(company);
+  return rest;
 }
 
 app.get('/api/companies', asyncRoute(async (req, res) => {
   requireAdmin(req);
   if (adminOf(req).scope !== 'hq') throw httpError(403, 'FORBIDDEN', '只有总部管理员可以查看全部公司');
-  res.json({ items: await companiesWithCodes() });
+  res.json({ items: await managedCompanies() });
 }));
 
 app.post('/api/companies', asyncRoute(async (req, res) => {
@@ -390,17 +389,12 @@ app.post('/api/companies', asyncRoute(async (req, res) => {
   if (!name) throw httpError(400, 'VALIDATION_ERROR', '公司名称不能为空');
   const id = 'co-' + crypto.randomBytes(3).toString('hex');
   const base = seedData().company;
-  const existing = await store.listCompanies();
-  const used = new Set(existing.map((item) => item.certCode).filter(Boolean));
-  let certCode = '';
-  do { certCode = makeCertCode(); } while (used.has(certCode));
   const company = {
     ...base,
     name,
     shortName: text(req.body && req.body.shortName, 20) || name.slice(0, 8),
     address: text(req.body && req.body.address, 160) || '',
     phone: text(req.body && req.body.phone, 40) || '',
-    certCode,
   };
   await store.saveCompanyRecord(id, company);
   res.status(201).json({ id, company });
@@ -437,7 +431,8 @@ app.post('/api/login', asyncRoute(async (req, res) => {
   const ip = clientIp(req);
   assertLoginAllowed(ip, username);
   const account = await store.findAdminByUsername(username);
-  if (!account || !safeEqual(hashPassword(password || ''), account.passwordHash)) {
+  if (!account || (account.reviewOnly && !reviewTestMode())
+    || !safeEqual(hashPassword(password || ''), account.passwordHash)) {
     recordLoginFailure(ip, username);
     throw httpError(401, 'LOGIN_FAILED', '账号或密码错误');
   }
@@ -562,13 +557,10 @@ app.get('/api/company', asyncRoute(async (req, res) => {
   }
   const id = admin && admin.scope === 'company' ? admin.companyId : (requested || 'default');
   let company = await store.getCompany(id);
-  if (company && isAdmin && !company.certCode) {
-    const items = await companiesWithCodes();
-    company = items.find((item) => item.id === id) || company;
-  }
+  if (company && !reviewCompanyVisible(company)) company = null;
   const visible = isAdmin
-    ? (admin.scope === 'hq' || !company ? company : (({ cardTemplates, ...rest }) => rest)(company))
-    : hideCertCode(company);
+    ? (admin.scope === 'hq' || !company ? stripCertificationCode(company) : publicCompany(company))
+    : publicCompany(company);
   res.json({ company: visible });
 }));
 
@@ -913,7 +905,7 @@ app.delete('/api/employees/:id', asyncRoute(async (req, res) => {
 
 app.get('/api/employee/companies', asyncRoute(async (req, res) => {
   requireEmployee(req);
-  const items = (await store.listCompanies())
+  const items = (await managedCompanies())
     .filter((item) => item.id)
     .map((item) => ({ id: item.id, name: item.name || '', shortName: item.shortName || '' }));
   res.json({ items });
@@ -937,17 +929,10 @@ app.get('/api/employee/certification', asyncRoute(async (req, res) => {
 
 app.post('/api/employee/certification', asyncRoute(async (req, res) => {
   const user = requireEmployee(req);
-  const code = text(req.body && req.body.code, 12).toUpperCase();
-  let company = null;
-  if (code) {
-    company = (await store.listCompanies()).find((item) => String(item.certCode || '').toUpperCase() === code);
-    if (!company) throw httpError(404, 'NOT_FOUND', '认证码不正确');
-  } else {
-    const companyId = text(req.body && req.body.companyId, 40);
-    if (!companyId) throw httpError(400, 'VALIDATION_ERROR', '请选择公司或填写认证码');
-    company = (await store.listCompanies()).find((item) => item.id === companyId);
-    if (!company) throw httpError(404, 'NOT_FOUND', '公司不存在');
-  }
+  const companyId = text(req.body && req.body.companyId, 40);
+  if (!companyId) throw httpError(400, 'VALIDATION_ERROR', '请选择企业');
+  const company = (await managedCompanies()).find((item) => item.id === companyId);
+  if (!company) throw httpError(404, 'NOT_FOUND', '公司不存在');
   if (!company.id) throw httpError(400, 'VALIDATION_ERROR', '请选择企业');
   const applications = await listCertifications(store);
   const sameCompany = (item, status) => item.personId === user.id && item.companyId === company.id && item.status === status;
@@ -956,6 +941,7 @@ app.post('/api/employee/certification', asyncRoute(async (req, res) => {
   }
   const now = nowIso();
   const existing = applications.find((item) => sameCompany(item, 'pending'));
+  const autoApproved = isReviewCompany(company.id);
   const row = await saveCertification(store, {
     id: existing ? existing.id : undefined,
     personId: user.id,
@@ -965,11 +951,12 @@ app.post('/api/employee/certification', asyncRoute(async (req, res) => {
     name: user.name || '',
     phone: user.authPhone || user.phone || '',
     title: user.title || '',
-    status: 'pending',
+    status: autoApproved ? 'approved' : 'pending',
     createdAt: existing ? existing.createdAt : now,
   });
   res.status(existing ? 200 : 201).json({
     alreadyPending: !!existing,
+    autoApproved,
     application: {
       id: row.id,
       companyId: row.companyId,
@@ -1055,12 +1042,12 @@ app.get('/api/employee/me', asyncRoute(async (req, res) => {
   await Promise.all((employee.cards || []).map(async (card) => {
     const cardCompany = card.companyId ? await store.getCompany(card.companyId) : null;
     cardCompanies[card.id] = cardCompany
-      ? hideCertCode(companyForTemplate(cardCompany, root, card.template))
+      ? publicCompany(companyForTemplate(cardCompany, root, card.template))
       : null;
   }));
   res.json({
     employee,
-    templateCompany: company ? hideCertCode(companyForTemplate(company, root, employee.cardTemplate)) : null,
+    templateCompany: company ? publicCompany(companyForTemplate(company, root, employee.cardTemplate)) : null,
     cardCompanies,
   });
 }));
@@ -1080,7 +1067,7 @@ app.get('/api/employee/templates', asyncRoute(async (req, res) => {
         name: template.name,
         companyId,
         companyName: company.name,
-        company: hideCertCode(companyForTemplate(company, root, template.id)),
+        company: publicCompany(companyForTemplate(company, root, template.id)),
       });
     }
   }
@@ -1214,7 +1201,7 @@ app.get('/api/cards/:id', asyncRoute(async (req, res) => {
   const root = await store.getCompany('default');
   const assignedCompany = card.companyId ? await store.getCompany(card.companyId) : null;
   const company = assignedCompany
-    ? hideCertCode(companyForTemplate(assignedCompany, root, card.cardTemplate))
+    ? publicCompany(companyForTemplate(assignedCompany, root, card.cardTemplate))
     : null;
   res.json({ card, company, owned: false });
 }));

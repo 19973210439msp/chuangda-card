@@ -12,7 +12,6 @@ Page({
     companies: [],
     companyNames: [],
     companyIndex: 0,
-    certCode: '',
     cert: {},
     companyOpen: false,
   },

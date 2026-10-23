@@ -6,22 +6,6 @@
   line-height: 1.5;
 }
 
-.cert-code {
-  display: block;
-  width: 100%;
-  height: 88rpx;
-  min-height: 88rpx;
-  margin: 0;
-  padding: 0 24rpx;
-  box-sizing: border-box;
-  border: 1rpx solid #e6e8ee;
-  border-radius: 8rpx;
-  background: #ffffff;
-  color: #3a3f4b;
-  font-size: 28rpx;
-  line-height: 88rpx;
-}
-
 .company-pick {
   display: flex;
   align-items: center;

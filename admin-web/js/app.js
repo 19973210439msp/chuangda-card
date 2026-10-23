@@ -42,7 +42,6 @@ const state = {
   templates: [],
   editingTemplate: '',
   previewTemplate: '',
-  certCode: '',
 };
 
 let noticeTimer;
@@ -380,7 +379,6 @@ function certHtml() {
     <div class="panel table-wrap">
       <h3>待审核</h3>
       <p class="lede">员工提交的企业认证在这里审核。通过后不会自动改名片上的公司，由员工自己在编辑名片里选择。取消认证后，名片上的该公司会被清掉，对应子公司管理员也不再看到这名员工。</p>
-      ${state.certCode ? `<p class="lede">本公司认证码：<b>${esc(state.certCode)}</b>。员工也可以不选公司，直接填写这个认证码。</p>` : ''}
       <table>
         <thead>${head}</thead>
         <tbody>${pendingRows || `<tr><td colspan="${cols}">没有待审核的申请</td></tr>`}</tbody>
@@ -400,14 +398,13 @@ function companiesHtml() {
     <tr>
       <td>${esc(item.name || '')}</td>
       <td>${esc(item.shortName || '')}</td>
-      <td>${item.id === 'default' ? '总部' : '子公司'}</td>
-      <td>${item.id === 'default' ? '' : esc(item.certCode || '')}</td>
+      <td>${item.id === 'default' ? '总部' : (item.reviewOnly ? '测试企业' : '子公司')}</td>
     </tr>`).join('');
   return shell('子公司', `
     <div class="panel table-wrap">
       <table>
-        <thead><tr><th>公司全称</th><th>简称</th><th>类型</th><th>认证码</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="4">还没有公司</td></tr>'}</tbody>
+        <thead><tr><th>公司全称</th><th>简称</th><th>类型</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="3">还没有公司</td></tr>'}</tbody>
       </table>
     </div>
     <form class="panel" data-form="company" autocomplete="off">
@@ -657,12 +654,6 @@ async function loadView(view) {
     state.companies = (await api('/api/companies')).items || [];
   } else if (view === 'cert') {
     state.certifications = (await api('/api/certifications')).items || [];
-    if (state.admin.scope === 'company' && state.admin.companyId) {
-      const brand = await api('/api/company?id=' + encodeURIComponent(state.admin.companyId));
-      state.certCode = (brand.company && brand.company.certCode) || '';
-    } else {
-      state.certCode = '';
-    }
   } else if (view === 'cards') {
     const [employees, companies] = await Promise.all([
       api('/api/employees?q=' + encodeURIComponent(state.query)),

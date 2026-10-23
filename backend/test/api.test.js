@@ -742,7 +742,7 @@ test('company admin isolation and pinned share links', async () => {
   const ownCompany = await api('/api/company', { token: subToken });
   assert.equal(ownCompany.status, 200);
   assert.equal(ownCompany.json.company.name, '子公司甲');
-  assert.match(ownCompany.json.company.certCode, /^[A-Z0-9]{6}$/);
+  assert.equal(Object.prototype.hasOwnProperty.call(ownCompany.json.company, 'certCode'), false);
   const otherCompany = await api('/api/company?id=default', { token: subToken });
   assert.equal(otherCompany.status, 403);
   assert.equal(otherCompany.json.error.code, 'FORBIDDEN');
@@ -1050,9 +1050,7 @@ test('employee certification is account-level and enables the first subsidiary c
   });
   assert.equal(created.status, 201);
   const companyId = created.json.id;
-  const code = created.json.company.certCode;
-  assert.equal(typeof code, 'string');
-  assert.ok(code);
+  assert.equal(Object.prototype.hasOwnProperty.call(created.json.company, 'certCode'), false);
   assert.equal((await api('/api/templates/classic', {
     method: 'PUT', token: hqToken, body: { companyIds: [companyId] },
   })).status, 200);
@@ -1085,17 +1083,10 @@ test('employee certification is account-level and enables the first subsidiary c
   assert.equal(choices.json.items.some((item) => item.id === companyId), true);
   assert.equal(Object.prototype.hasOwnProperty.call(choices.json.items[0], 'certCode'), false);
 
-  const badCode = await api('/api/employee/certification', {
-    method: 'POST',
-    token,
-    body: { code: 'NOCODE' },
-  });
-  assert.equal(badCode.status, 404);
-
   const applied = await api('/api/employee/certification', {
     method: 'POST',
     token,
-    body: { code },
+    body: { companyId },
   });
   assert.equal(applied.status, 201);
   assert.equal(applied.json.application.companyId, companyId);
@@ -1455,9 +1446,8 @@ test('hq can find an employee by an inactive card and receives every card', asyn
   const hq = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
   const employee = await api('/api/auth/wechat', { method: 'POST', body: { code: 'dev:hq-all-cards-search' } });
   const token = employee.json.token;
-  const root = await api('/api/company?id=default', { token: hq.json.token });
   const application = await api('/api/employee/certification', {
-    method: 'POST', token, body: { companyId: 'default', code: root.json.company.certCode },
+    method: 'POST', token, body: { companyId: 'default' },
   });
   assert.equal(application.status, 201);
   assert.equal((await api('/api/certifications/' + application.json.application.id + '/approve', {
@@ -1490,10 +1480,9 @@ test('holder pins one employee card and hides it after certification revocation'
   const hq = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
   const target = await api('/api/auth/wechat', { method: 'POST', body: { code: 'dev:holder-pinned-target' } });
   const targetToken = target.json.token;
-  const root = await api('/api/company?id=default', { token: hq.json.token });
   const application = await api('/api/employee/certification', {
     method: 'POST', token: targetToken,
-    body: { companyId: 'default', code: root.json.company.certCode },
+    body: { companyId: 'default' },
   });
   assert.equal(application.status, 201);
   assert.equal((await api('/api/certifications/' + application.json.application.id + '/approve', {
