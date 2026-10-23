@@ -189,11 +189,14 @@ test('employee card, holder, account and analytics', async () => {
   });
   assert.equal(confirmed.status, 201);
   const ocrId = confirmed.json.item.cardId;
+  assert.equal(confirmed.json.item.card.cardTemplate, 'wave');
+  assert.equal(confirmed.json.item.card.templateLabel, '蓝韵模板');
   const hidden = await api('/api/cards/' + ocrId);
   assert.equal(hidden.status, 404);
   const owned = await api('/api/cards/' + ocrId, { token });
   assert.equal(owned.status, 200);
   assert.equal(owned.json.card.name, '纸质客户');
+  assert.equal(owned.json.card.cardTemplate, 'wave');
   assert.equal(owned.json.company, null);
 
   const blankConfirmed = await api('/api/holder/confirm', {
@@ -1522,6 +1525,7 @@ test('holder pins one employee card and hides it after certification revocation'
   assert.equal(saved.status, 201);
   assert.equal(saved.json.item.shareCardId, secondCardId);
   assert.equal(saved.json.item.card.name, '收藏测试第二张');
+  assert.equal(saved.json.item.card.cardTemplate, 'horizon');
 
   assert.equal((await api('/api/employee/cards/active', {
     method: 'PUT', token: targetToken, body: { cardId: firstCardId },
@@ -1530,6 +1534,10 @@ test('holder pins one employee card and hides it after certification revocation'
   const pinnedItem = pinned.json.items.find((item) => item.cardId === target.json.employee.id);
   assert.equal(pinnedItem.shareCardId, secondCardId);
   assert.equal(pinnedItem.card.name, '收藏测试第二张');
+  assert.equal(pinnedItem.card.cardTemplate, 'horizon');
+  const sourceAfterFavorite = await api('/api/employee/me', { token: targetToken });
+  assert.equal(sourceAfterFavorite.json.employee.cards.find((card) => card.id === firstCardId).template, 'classic');
+  assert.equal(sourceAfterFavorite.json.employee.cards.find((card) => card.id === secondCardId).template, 'horizon');
 
   assert.equal((await api('/api/certifications/' + application.json.application.id + '/revoke', {
     method: 'POST', token: hq.json.token, body: {},

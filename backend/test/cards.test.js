@@ -42,6 +42,8 @@ test('ocr contacts project their top-level fields without employee cards', () =>
   assert.equal(card.name, '纸质客户');
   assert.equal(card.company, '外滩制造');
   assert.equal(card.phone, '021-55556666');
+  assert.equal(card.cardTemplate, 'wave');
+  assert.equal(card.templateLabel, '蓝韵模板');
   assert.equal(card.activeCardId, '');
 });
 

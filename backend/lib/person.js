@@ -1,3 +1,5 @@
+const OCR_DEFAULT_TEMPLATE = 'wave';
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -16,7 +18,7 @@ function blankPerson(partial) {
     department: partial.department || '',
     phone: partial.phone || '',
     authPhone: partial.authPhone || '',
-    cardTemplate: partial.cardTemplate || 'classic',
+    cardTemplate: partial.cardTemplate || (partial.kind === 'ocr' ? OCR_DEFAULT_TEMPLATE : 'classic'),
     activeCardId: partial.activeCardId || '',
     cards: Array.isArray(partial.cards) ? partial.cards : [],
     wechat: partial.wechat || '',
@@ -125,6 +127,9 @@ function seedData() {
 function toCard(person) {
   const { projectActive, templateLabel } = require('./cards');
   if (person && person.kind === 'ocr') {
+    const cardTemplate = !person.cardTemplate || person.cardTemplate === 'classic'
+      ? OCR_DEFAULT_TEMPLATE
+      : person.cardTemplate;
     return {
       id: person.id,
       employeeNo: '',
@@ -137,9 +142,9 @@ function toCard(person) {
       email: person.email || '',
       address: person.address || '',
       attachments: Array.isArray(person.attachments) ? person.attachments : [],
-      cardTemplate: '',
+      cardTemplate,
       companyId: '',
-      templateLabel: '',
+      templateLabel: templateLabel(cardTemplate),
       activeCardId: '',
       kind: 'ocr',
       status: person.status,
