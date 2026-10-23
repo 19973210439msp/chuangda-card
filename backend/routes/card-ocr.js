@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const { asyncRoute, httpError } = require('../lib/errors');
 const { requireEmployee } = require('../lib/access');
-const { recognizeBusinessCard } = require('../lib/tencentOcr');
+const { recognizeBusinessCard } = require('../lib/aliyunOcr');
 
 const router = express.Router();
 const upload = multer({

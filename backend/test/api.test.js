@@ -12,13 +12,11 @@ process.env.SKIP_WECHAT_AUTH = 'true';
 process.env.ADMIN_USER = 'admin';
 process.env.ADMIN_PASS = 'admin123';
 delete process.env.DATABASE_URL;
-process.env.TENCENT_SECRET_ID = '';
-process.env.TENCENT_SECRET_KEY = '';
 process.env.ALIBABA_CLOUD_ACCESS_KEY_ID = '';
 process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET = '';
 process.env.ALIYUN_SMS_SIGN_NAME = '';
 process.env.ALIYUN_SMS_TEMPLATE_CODE = '';
-process.env.OCR_PROVIDER = 'tencent';
+process.env.OCR_PROVIDER = 'aliyun';
 process.env.LOGIN_FAIL_LIMIT = '5';
 process.env.LOGIN_LOCK_MS = '200';
 

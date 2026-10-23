@@ -130,7 +130,7 @@ miniprogram/pages/mine/index.*
 4. 个人名片主数据在当前方案的主存储（JSON 或 PostgreSQL），OSS 只做名片夹引用。
 5. 不删除管理后台、H5 公开页、埋点和兴趣指数。
 6. 小程序不要做工号登录；网页后台不要做微信登录。
-7. 拍名片识别走腾讯云名片识别；未配置密钥时接口返回未配置，不要换一家厂商。
+7. 拍名片识别走阿里云 `RecognizeGeneralStructure` 通用票证抽取；未配置密钥时接口返回未配置。
 8. 手机号仅登录时微信授权；编辑页可直接改邮箱，不再要求邮箱验证码。
 9. 注销只停用，不删名片正文、埋点、OSS 引用。
 
@@ -140,7 +140,7 @@ miniprogram/pages/mine/index.*
 
 ### 拍名片识别
 
-用 **腾讯云名片识别**（`OCR_PROVIDER=tencent`）。小程序只上传照片；后端调用识别，把草稿返回给用户核对，用户确认后再写入名片夹。密钥放环境变量 `TENCENT_SECRET_ID`、`TENCENT_SECRET_KEY`。没配密钥时返回「识别未配置」，不要在小程序里写死密钥，也不要改接其他厂商。
+用 **阿里云通用票证抽取**（`OCR_PROVIDER=aliyun`，OpenAPI `RecognizeGeneralStructure`）。小程序只上传照片；后端固定传入姓名、公司、部门、职位、手机、电话、邮箱、微信和地址等 Keys，把结构化结果作为草稿返回给用户核对，用户确认后再写入名片夹。密钥使用 `ALIBABA_CLOUD_ACCESS_KEY_ID`、`ALIBABA_CLOUD_ACCESS_KEY_SECRET`，只放服务器环境变量；没配密钥时返回「识别未配置」。
 
 ### 手机号与邮箱
 

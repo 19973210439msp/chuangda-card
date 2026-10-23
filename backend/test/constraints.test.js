@@ -115,45 +115,42 @@ test('card access audit reports migration risks without exposing card fields', (
   assert.equal(JSON.stringify(summary).includes('测试员工'), false);
 });
 
-test('ocr stays on Tencent and reports missing keys', () => {
-  const { assertOcrReady, mapDraft } = require('../lib/tencentOcr');
+test('ocr uses Aliyun general structure extraction and reports missing keys', () => {
+  const { assertOcrReady, mapDraft, mergeKvData, CARD_KEYS } = require('../lib/aliyunOcr');
   const previousProvider = process.env.OCR_PROVIDER;
-  const previousId = process.env.TENCENT_SECRET_ID;
-  const previousKey = process.env.TENCENT_SECRET_KEY;
-  delete process.env.TENCENT_SECRET_ID;
-  delete process.env.TENCENT_SECRET_KEY;
-  process.env.OCR_PROVIDER = 'tencent';
+  const previousId = process.env.ALIBABA_CLOUD_ACCESS_KEY_ID;
+  const previousKey = process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET;
+  delete process.env.ALIBABA_CLOUD_ACCESS_KEY_ID;
+  delete process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET;
+  process.env.OCR_PROVIDER = 'aliyun';
   assert.throws(() => assertOcrReady(), (err) => err.code === 'OCR_NOT_CONFIGURED' && err.message === '识别未配置');
-  process.env.OCR_PROVIDER = 'baidu';
+  process.env.OCR_PROVIDER = 'tencent';
   assert.throws(() => assertOcrReady(), (err) => err.code === 'OCR_PROVIDER_INVALID');
-  const draft = mapDraft([
-    { Name: '姓名', Value: '赵六' },
-    { Name: '公司', Value: '北城实业' },
-    { Name: '部门', Value: '市场部' },
-    { Name: '职位', Value: '经理' },
-    { Name: '手机', Value: '13600001111' },
-    { Name: '邮箱', Value: 'zhao@bei.example' },
-    { Name: '地址', Value: '杭州市西湖区' },
+  const extracted = mergeKvData([
+    { kvInfo: { data: JSON.stringify({ 姓名: '赵六', 公司: '北城实业', 部门: '市场部' }) } },
+    { kvInfo: { data: { 职位: '经理', 手机: '13600001111', 邮箱: 'zhao@bei.example', 地址: '杭州市西湖区' } } },
   ]);
+  const draft = mapDraft(extracted);
   assert.equal(draft.name, '赵六');
   assert.equal(draft.company, '北城实业');
   assert.equal(draft.title, '市场部 经理');
   assert.equal(draft.phone, '13600001111');
   assert.equal(draft.email, 'zhao@bei.example');
-  const noisy = mapDraft([
-    { Name: '手机', Value: '19116390887G' },
-    { Name: '邮箱', Value: 'shuman@universalteck.cnC' },
-    { Name: '地址', Value: '上海市浦东新区金海路1809号O' },
-  ]);
+  const noisy = mapDraft({
+    手机: '19116390887G',
+    邮箱: 'shuman@universalteck.cnC',
+    地址: '上海市浦东新区金海路1809号O',
+  });
   assert.equal(noisy.phone, '19116390887');
   assert.equal(noisy.email, 'shuman@universalteck.cn');
   assert.equal(noisy.address, '上海市浦东新区金海路1809号');
+  assert.deepEqual(CARD_KEYS, ['姓名', '公司', '部门', '职位', '手机', '电话', '邮箱', '微信', '地址']);
   if (previousProvider === undefined) delete process.env.OCR_PROVIDER;
   else process.env.OCR_PROVIDER = previousProvider;
-  if (previousId === undefined) delete process.env.TENCENT_SECRET_ID;
-  else process.env.TENCENT_SECRET_ID = previousId;
-  if (previousKey === undefined) delete process.env.TENCENT_SECRET_KEY;
-  else process.env.TENCENT_SECRET_KEY = previousKey;
+  if (previousId === undefined) delete process.env.ALIBABA_CLOUD_ACCESS_KEY_ID;
+  else process.env.ALIBABA_CLOUD_ACCESS_KEY_ID = previousId;
+  if (previousKey === undefined) delete process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET;
+  else process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET = previousKey;
 });
 
 test('purgeExpiredCodes removes used and long-expired rows', async () => {
