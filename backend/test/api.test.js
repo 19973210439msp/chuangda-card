@@ -196,6 +196,15 @@ test('employee card, holder, account and analytics', async () => {
   assert.equal(owned.json.card.name, '纸质客户');
   assert.equal(owned.json.company, null);
 
+  const blankConfirmed = await api('/api/holder/confirm', {
+    method: 'POST',
+    token,
+    body: {},
+  });
+  assert.equal(blankConfirmed.status, 201);
+  assert.equal(blankConfirmed.json.item.card.name, '');
+  assert.equal(blankConfirmed.json.item.card.phone, '');
+
   const form = new FormData();
   form.append('photo', new Blob([Buffer.from('fake-image')]), 'card.jpg');
   const ocr = await api('/api/holder/recognize', { method: 'POST', token, form });

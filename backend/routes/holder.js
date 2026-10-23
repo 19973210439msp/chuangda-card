@@ -111,9 +111,6 @@ router.post('/confirm', asyncRoute(async (req, res) => {
     email: text(body.email, 80),
     address: text(body.address, 120),
   };
-  if (!fields.name && !fields.phone) {
-    throw httpError(400, 'VALIDATION_ERROR', '请至少确认姓名或电话');
-  }
   const store = getStore();
   await assertNotDuplicate(user.id, fields);
   const card = blankPerson({

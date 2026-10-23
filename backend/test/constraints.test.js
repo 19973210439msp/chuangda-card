@@ -144,6 +144,19 @@ test('ocr uses Aliyun general structure extraction and reports missing keys', ()
   assert.equal(noisy.phone, '19116390887');
   assert.equal(noisy.email, 'shuman@universalteck.cn');
   assert.equal(noisy.address, '上海市浦东新区金海路1809号');
+  const missing = mapDraft({
+    姓名: '未识别到明确姓名信息',
+    公司: '无明确公司信息',
+    部门: '无明确部门信息',
+    职位: 'COO',
+    手机: '未提供',
+    微信: '暂无',
+  });
+  assert.equal(missing.name, '');
+  assert.equal(missing.company, '');
+  assert.equal(missing.title, 'COO');
+  assert.equal(missing.phone, '');
+  assert.equal(missing.wechat, '');
   assert.deepEqual(CARD_KEYS, ['姓名', '公司', '部门', '职位', '手机', '电话', '邮箱', '微信', '地址']);
   if (previousProvider === undefined) delete process.env.OCR_PROVIDER;
   else process.env.OCR_PROVIDER = previousProvider;

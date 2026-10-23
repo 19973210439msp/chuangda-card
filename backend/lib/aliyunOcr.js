@@ -50,12 +50,20 @@ function cleanAddress(value) {
   return String(value || '').trim().replace(/([\u4e00-\u9fff0-9])[A-Za-z]$/, '$1');
 }
 
+function isMissingValue(value) {
+  const text = String(value || '').trim();
+  if (!text) return true;
+  if (/^(?:无明确.*信息|未识别(?:到)?(?:明确)?.*信息)$/.test(text)) return true;
+  return /^(?:未提供|未填写|未识别|未知|不详|暂无|无|没有|空|none|null|n\/?a)$/i.test(text);
+}
+
 function objectValue(value) {
   if (Array.isArray(value)) return value.map(objectValue).filter(Boolean).join(' ');
   if (value && typeof value === 'object') {
     return objectValue(value.value || value.text || value.content || '');
   }
-  return String(value == null ? '' : value).trim();
+  const text = String(value == null ? '' : value).trim();
+  return isMissingValue(text) ? '' : text;
 }
 
 function parseKvData(value) {
@@ -158,4 +166,5 @@ module.exports = {
   cleanPhone,
   cleanEmail,
   cleanAddress,
+  isMissingValue,
 };
