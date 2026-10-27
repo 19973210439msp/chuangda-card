@@ -10,11 +10,10 @@
         <text class="value">{{phoneText || '未绑定'}}</text>
         <image class="chev" src="/assets/icons/arrow-right.png" mode="aspectFit"></image>
       </view>
-      <view class="row" bindtap="onCert">
+      <view class="row">
         <image class="ico" src="/assets/icons/card-style.png" mode="aspectFit"></image>
-        <text class="name">企业认证</text>
-        <text class="value">{{certText}}</text>
-        <image class="chev" src="/assets/icons/arrow-right.png" mode="aspectFit"></image>
+        <text class="name">名片权限</text>
+        <text class="value">{{permissionText}}</text>
       </view>
       <view class="row" bindtap="onClose">
         <image class="ico" src="/assets/icons/logout.png" mode="aspectFit"></image>

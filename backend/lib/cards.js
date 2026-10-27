@@ -6,7 +6,7 @@ const TEMPLATES = {
   wave: '蓝韵模板',
 };
 
-const CARD_LIFECYCLES = new Set(['draft', 'active', 'archived']);
+const CARD_LIFECYCLES = new Set(['draft', 'active', 'archived', 'deleted']);
 
 function templateLabel(template) {
   if (String(template || '').startsWith('tpl-')) return '总部自定义模板';
@@ -56,6 +56,7 @@ function normalizeCard(card, index, hasDefault) {
       : '',
     lifecycle: CARD_LIFECYCLES.has(source.lifecycle) ? source.lifecycle : 'active',
     source: source.source || 'legacy_unknown',
+    ...(source.deletedAt ? { deletedAt: source.deletedAt } : {}),
     attachments: (Array.isArray(source.attachments) ? source.attachments : [])
       .filter((item) => !item || item.name !== '微信二维码'),
   };
@@ -148,7 +149,7 @@ function projectActive(person) {
 
 function identityPhone(person) {
   if (!person) return '';
-  if (person.authPhone) return person.authPhone;
+  if (person.authPhone || person.accountPhone) return person.authPhone || person.accountPhone;
   const ready = ensureCards(person);
   const card = ready.cards.find((item) => item.isDefault) || ready.cards[0];
   return (card && card.phone) || person.phone || '';
@@ -180,7 +181,7 @@ function writeActive(person, fields) {
     if (card.id !== ready.activeCardId) return card;
     return cardFromFields({ ...card, ...fields }, {
       id: card.id,
-      template: card.template,
+      template: fields.cardTemplate === undefined ? card.template : fields.cardTemplate,
       isDefault: card.isDefault,
       lifecycle: card.lifecycle,
       source: card.source,
@@ -285,7 +286,7 @@ function writeCompanyTemplateCard(person, fields) {
   const companyId = Object.prototype.hasOwnProperty.call(fields, 'companyId') ? String(fields.companyId || '') : '';
   const template = fields.cardTemplate;
   if (!validTemplate(template)) throw invalidTemplate();
-  const existing = ready.cards.find((card) => card.companyId === companyId && card.template === template);
+  const existing = ready.cards.find((card) => card.companyId === companyId && card.template === template && card.lifecycle !== 'deleted');
   if (existing) {
     if (existing.lifecycle !== 'active') assertActiveCardLimit(ready.cards);
     const cards = ready.cards.map((card) => {

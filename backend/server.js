@@ -15,14 +15,16 @@ const { saveSelfCard, rememberOpenAccount } = require('./lib/contact');
 const { writeDefault, writeCard, writeCompanyTemplateCard, removeCard, archiveCard, archiveCompanyCards, addCard, switchTo, ensureCards, projectCard, projectActive } = require('./lib/cards');
 const { publicCardState } = require('./lib/cardAccess');
 const { allTemplates, listTemplates, visibleTemplates, templateGrantedTo, setBuiltInAssignments, createTemplate, companyForTemplate } = require('./lib/templates');
-const { listCertifications, saveCertification, approvedCompanyIds, migrateLegacyCertifications } = require('./lib/certifications');
+const { defaultPermissionEnabled, normalizePermission, effectivePermission, canManageCompany, assertManageCompany, setPermission, mergePermissions } = require('./lib/cardPermissions');
 const { migrateCardRecords } = require('./lib/cardMigration');
 const {
   text,
   normalizeAttachments,
   assertHexColor,
+  normalizePhone,
+  assertMobile,
 } = require('./lib/validate');
-const { findOccupyingPhone, assertPhoneAvailable } = require('./lib/identity');
+const { findOccupyingPhone } = require('./lib/identity');
 const { rowsFromSpreadsheet, rowsFromDocx, normalizeImportRow } = require('./lib/spreadsheet');
 const {
   safeEqual,
@@ -39,11 +41,8 @@ const { clientIp, assertLoginAllowed, recordLoginFailure, recordLoginSuccess } =
 const { applyCors } = require('./lib/cors');
 const { validatedFileType } = require('./lib/fileType');
 const {
-  reviewTestMode,
   reviewCompanyVisible,
-  isReviewCompany,
   stripCertificationCode,
-  syncReviewTestEnvironment,
 } = require('./lib/reviewTest');
 
 let store;
@@ -55,9 +54,7 @@ try {
 }
 
 const ready = store.ready().then(async () => {
-  await migrateLegacyCertifications(store);
   await migrateCardRecords(store);
-  await syncReviewTestEnvironment(store, seedData().company);
 });
 const app = express();
 app.set('trust proxy', 1);
@@ -95,7 +92,7 @@ app.use(asyncRoute(async (req, res, next) => {
   }
   if (session.role === 'admin' && session.userId && session.userId !== 'admin') {
     const admin = await store.getAdmin(session.userId);
-    if (!admin || admin.passwordHash !== session.secretStamp || (admin.reviewOnly && !reviewTestMode())) {
+    if (!admin || admin.passwordHash !== session.secretStamp || admin.reviewOnly) {
       await store.deleteSession(token);
       return next();
     }
@@ -132,7 +129,7 @@ function matchesQuery(person, q) {
   const cardFields = (person.cards || []).flatMap((card) => [
     card.name, card.phone, card.title, card.email, card.company,
   ]);
-  const haystack = [person.name, person.phone, person.employeeNo, person.title, person.email, person.department, person.company, ...cardFields]
+  const haystack = [person.name, person.phone, person.authPhone, person.accountPhone, person.employeeNo, person.title, person.email, person.department, person.company, ...cardFields]
     .join('\n')
     .toLowerCase();
   return haystack.includes(String(q).trim().toLowerCase());
@@ -187,28 +184,21 @@ function applyAdminFields(existing, body) {
 
 function assertStaffIdentity(person) {
   if (!person.name) throw httpError(400, 'VALIDATION_ERROR', '姓名不能为空');
-  if (!person.phone) throw httpError(400, 'VALIDATION_ERROR', '手机号不能为空');
+  assertMobile(normalizePhone(person.phone));
 }
 
-async function assertEmployeeNoFree(employeeNo, exceptId) {
-  const found = await store.findByEmployeeNo(employeeNo);
-  if (found && found.id !== exceptId) throw httpError(409, 'EMPLOYEE_EXISTS', '工号已存在：' + employeeNo);
-}
+
 
 async function upsertImported(draft, options = {}) {
   const companyId = String(draft.companyId || '');
+  const accountPhone = normalizePhone(draft.accountPhone || draft.phone);
+  assertMobile(accountPhone);
+  draft.phone = normalizePhone(draft.phone);
+  assertMobile(draft.phone);
   const cardTemplate = String(draft.cardTemplate || '');
   if (!companyId) throw httpError(400, 'VALIDATION_ERROR', '创建企业名片必须指定企业');
   if (!cardTemplate) throw httpError(400, 'VALIDATION_ERROR', '创建企业名片必须指定模板');
-  const byNo = draft.employeeNo ? await store.findByEmployeeNo(draft.employeeNo) : null;
-  const byPhone = draft.phone ? await findOccupyingPhone(store, draft.phone) : null;
-  if (byNo && byPhone && byNo.id !== byPhone.id) {
-    throw httpError(409, 'IDENTITY_CONFLICT', '工号与手机号分别属于两名员工，请先在后台合并');
-  }
-  if (!byNo && byPhone && draft.employeeNo && byPhone.employeeNo && byPhone.employeeNo !== draft.employeeNo) {
-    throw httpError(409, 'PHONE_EXISTS', '手机号已属于另一名员工');
-  }
-  const target = byNo || byPhone;
+  const target = await findOccupyingPhone(store, accountPhone);
   if (target) {
     const next = applyAdminFields(target, {
       name: draft.name,
@@ -220,11 +210,11 @@ async function upsertImported(draft, options = {}) {
       email: draft.email,
       address: draft.address,
       employeeNo: draft.employeeNo,
-      status: draft.status || target.status || 'active',
     });
     next.id = target.id;
     next.openid = target.openid;
     next.createdAt = target.createdAt;
+    next.accountPhone = target.accountPhone || target.authPhone || accountPhone;
     const cardFields = {
       name: next.name,
       company: next.company,
@@ -241,14 +231,12 @@ async function upsertImported(draft, options = {}) {
       ? addCard(next, cardTemplate, { ...cardFields, source: 'company_issued' })
       : writeCompanyTemplateCard(next, cardFields);
     const saved = await store.updatePerson(target.id, withCard);
-    await ensureImportedCertification(saved, companyId);
+
     return { employee: saved, merged: true };
   }
-  const id = draft.employeeNo && /^[A-Za-z0-9_-]+$/.test(draft.employeeNo)
-    ? 'emp-' + draft.employeeNo
-    : 'emp-' + crypto.randomBytes(4).toString('hex');
+  const id = 'emp-' + crypto.randomBytes(6).toString('hex');
   if (await store.getPerson(id)) throw httpError(409, 'EMPLOYEE_EXISTS', '名片编号已存在');
-  const person = writeCompanyTemplateCard({ ...draft, id, kind: 'employee', createdAt: nowIso(), cards: [] }, {
+  const person = writeCompanyTemplateCard({ ...draft, id, kind: 'employee', accountPhone, createdAt: nowIso(), cards: [] }, {
     name: draft.name,
     company: draft.company,
     title: draft.title,
@@ -261,35 +249,11 @@ async function upsertImported(draft, options = {}) {
     templateName: draft.templateName || '',
   });
   await store.insertPerson(person);
-  await ensureImportedCertification(person, companyId);
+
   return { employee: person, merged: false };
 }
 
-async function ensureImportedCertification(person, companyId) {
-  if (!person || !companyId) return;
-  const ready = ensureCards(person);
-  const card = ready.cards.find((item) => item.companyId === companyId)
-    || ready.cards.find((item) => item.id === ready.activeCardId);
-  if (!card) return;
-  const company = await store.getCompany(companyId);
-  const existing = (await listCertifications(store)).find((item) => (
-    item.personId === person.id && item.companyId === companyId
-  ));
-  if (existing && existing.status === 'approved') return;
-  const now = nowIso();
-  await saveCertification(store, {
-    id: existing ? existing.id : undefined,
-    personId: person.id,
-    legacyCardId: card.id,
-    companyId,
-    companyName: (company && company.name) || card.company || '',
-    name: card.name || person.name || '',
-    phone: card.phone || '',
-    title: card.title || '',
-    status: 'approved',
-    createdAt: existing ? existing.createdAt : now,
-  });
-}
+
 
 async function ensureHqAdmin() {
   const cred = adminCredentials();
@@ -311,15 +275,39 @@ function adminOf(req) {
   return req.admin || { id: 'admin', username: adminCredentials().username, companyId: '', scope: 'hq' };
 }
 
+function personRelatedToCompany(person, companyId) {
+  return Object.prototype.hasOwnProperty.call(person.companyCardPermissions || {}, companyId)
+    || !!(person.cardPermission && (person.cardPermission.companyIds || []).includes(companyId))
+    || ensureCards(person).cards.some((card) => card.companyId === companyId);
+}
+
 function viewForAdmin(person, admin) {
   if (!person) return null;
   if (!admin || admin.scope === 'hq') return person;
   const ready = ensureCards(person);
-  const cards = ready.cards.filter((card) => (
-    card.companyId === admin.companyId && card.lifecycle === 'active'
-  ));
-  if (!cards.length) return null;
-  return projectActive({ ...ready, cards, activeCardId: cards[0].id });
+  const cards = ready.cards.filter((card) => card.companyId === admin.companyId);
+  if (!cards.length && !personRelatedToCompany(person, admin.companyId)) return null;
+  const active = cards.find((card) => card.id === ready.activeCardId && card.lifecycle === 'active')
+    || cards.find((card) => card.lifecycle === 'active');
+  if (active) return projectCard({ ...ready, cards }, active.id);
+  if (cards.length) return { ...projectCard({ ...ready, cards }, cards[0].id), activeCardId: '' };
+  return {
+    ...ready,
+    cards: [],
+    activeCardId: '',
+    name: '',
+    company: '',
+    title: '',
+    department: '',
+    phone: '',
+    wechat: '',
+    email: '',
+    address: '',
+    attachments: [],
+    companyId: '',
+    cardTemplate: '',
+    templateName: '',
+  };
 }
 
 function employeeForAdmin(person, admin) {
@@ -358,7 +346,7 @@ async function allowedCardTemplate(templateId, admin, companyId) {
   if (!requested) throw httpError(400, 'VALIDATION_ERROR', '当前企业没有可用模板');
   const selected = allTemplates(root).find((item) => item.id === requested);
   if (!selected) throw httpError(400, 'VALIDATION_ERROR', '模板不存在');
-  if (!templateGrantedTo(root, requested, companyId)) {
+  if (admin.scope !== 'hq' && !templateGrantedTo(root, requested, companyId)) {
     throw httpError(403, 'TEMPLATE_FORBIDDEN', '该模板未分配给目标企业');
   }
   return selected;
@@ -372,7 +360,7 @@ async function managedCompanies() {
 
 function publicCompany(company) {
   if (!company) return company;
-  const { cardTemplates, reviewOnly, ...rest } = stripCertificationCode(company);
+  const { cardTemplates, cardTemplateGrants, defaultCardPermission, reviewOnly, ...rest } = stripCertificationCode(company);
   return rest;
 }
 
@@ -431,7 +419,7 @@ app.post('/api/login', asyncRoute(async (req, res) => {
   const ip = clientIp(req);
   assertLoginAllowed(ip, username);
   const account = await store.findAdminByUsername(username);
-  if (!account || (account.reviewOnly && !reviewTestMode())
+  if (!account || account.reviewOnly
     || !safeEqual(hashPassword(password || ''), account.passwordHash)) {
     recordLoginFailure(ip, username);
     throw httpError(401, 'LOGIN_FAILED', '账号或密码错误');
@@ -674,6 +662,8 @@ app.post('/api/employees', asyncRoute(async (req, res) => {
     company: company ? company.name : '',
     companyId,
   }), req.body || {});
+  draft.accountPhone = normalizePhone((req.body && req.body.accountPhone) || draft.phone);
+  assertMobile(draft.accountPhone);
   draft.companyId = companyId;
   draft.company = company.name || '';
   const cardTemplate = text(req.body && req.body.cardTemplate, 20);
@@ -697,7 +687,7 @@ async function importEmployeeList(list, res, options) {
   const company = await store.getCompany(companyId);
   const prepared = [];
   const rejected = [];
-  const seenNo = new Set();
+
   const seenPhone = new Set();
   list.forEach((item, index) => {
     const source = normalizeImportRow(item || {});
@@ -712,6 +702,8 @@ async function importEmployeeList(list, res, options) {
       draft.company = company ? company.name : '';
       draft.cardTemplate = cardTemplate;
       draft.templateName = selectedTemplate.name;
+      draft.phone = normalizePhone(draft.phone);
+      draft.accountPhone = draft.phone;
       if (!draft.phone) {
         rejected.push({ row, name: draft.name || '', reason: '缺少手机号，未创建' });
         return;
@@ -721,22 +713,20 @@ async function importEmployeeList(list, res, options) {
       rejected.push({ row, name: (source && source.name) || '', reason: err.message || '未创建' });
       return;
     }
-    if (draft.employeeNo) {
-      if (seenNo.has(draft.employeeNo)) {
-        rejected.push({ row, name: draft.name || '', reason: '导入列表中工号重复：' + draft.employeeNo });
-        return;
-      }
-      seenNo.add(draft.employeeNo);
-    }
+
     if (seenPhone.has(draft.phone)) {
       rejected.push({ row, name: draft.name || '', reason: '导入列表中手机号重复：' + draft.phone });
       return;
     }
     seenPhone.add(draft.phone);
+    draft.importRow = row;
     prepared.push(draft);
   });
   const saved = [];
-  for (const draft of prepared) saved.push(await upsertImported(draft));
+  for (const draft of prepared) {
+    try { saved.push(await upsertImported(draft)); }
+    catch (err) { rejected.push({ row: draft.importRow, name: draft.name || '', reason: err.message }); }
+  }
   const admin = options && options.admin;
   res.status(201).json({
     items: saved.map((item) => ({ ...(employeeForAdmin(item.employee, admin) || toSelf(item.employee)), merged: item.merged })),
@@ -798,18 +788,37 @@ app.post('/api/employees/:id/merge', asyncRoute(async (req, res) => {
   if (target.openid && source.openid && target.openid !== source.openid) {
     throw httpError(409, 'WECHAT_CONFLICT', '两名员工已绑定不同微信，不能合成一个人');
   }
-  const kept = {
-    ...target,
+  const targetReady = ensureCards(target);
+  const sourceReady = ensureCards(source);
+  const usedCardIds = new Set(targetReady.cards.map((card) => card.id));
+  const transferredCards = sourceReady.cards.map((card) => {
+    let id = card.id;
+    while (usedCardIds.has(id)) id = 'card-' + crypto.randomBytes(4).toString('hex');
+    usedCardIds.add(id);
+    return { ...card, id, isDefault: false };
+  });
+  const withPermissions = mergePermissions(target, source);
+  const kept = projectActive({
+    ...withPermissions,
     openid: target.openid || source.openid || '',
+    authPhone: target.authPhone || source.authPhone || '',
+    accountPhone: target.accountPhone || target.authPhone || source.accountPhone || source.authPhone || '',
+    cards: targetReady.cards.concat(transferredCards),
+    activeCardId: targetReady.activeCardId || (transferredCards[0] && transferredCards[0].id) || '',
     updatedAt: nowIso(),
-  };
+  });
   await store.updatePerson(target.id, kept);
-  await store.updatePerson(source.id, {
+  const retired = {
     ...source,
     openid: '',
     status: 'disabled',
+    cards: [],
+    activeCardId: '',
     updatedAt: nowIso(),
-  });
+  };
+  delete retired.cardPermission;
+  delete retired.companyCardPermissions;
+  await store.updatePerson(source.id, retired);
   await store.deleteSessionsForUser(source.id);
   await store.reassignHolderUser(source.id, target.id);
   await store.reassignViews(source.id, target.id);
@@ -852,10 +861,8 @@ app.put('/api/employees/:id', asyncRoute(async (req, res) => {
   if (touchesCard && targetCard && targetCard.lifecycle !== 'active') {
     throw httpError(409, 'CARD_ARCHIVED', '已归档名片不能修改');
   }
-  const requirePhone = !targetCard || targetCard.isDefault || !cardId;
+  const requirePhone = touchesCard && (!targetCard || targetCard.isDefault || !cardId);
   if (requirePhone && !next.phone) throw httpError(400, 'VALIDATION_ERROR', '手机号不能为空');
-  await assertEmployeeNoFree(next.employeeNo, person.id);
-  if (requirePhone && next.phone) await assertPhoneAvailable(store, next.phone, person.id);
   const fields = {
     name: next.name,
     company: next.company,
@@ -890,10 +897,7 @@ app.delete('/api/employees/:id', asyncRoute(async (req, res) => {
     const next = archiveCompanyCards(person, admin.companyId);
     next.updatedAt = nowIso();
     await store.updatePerson(person.id, next);
-    const certification = (await listCertifications(store)).find((item) => (
-      item.personId === person.id && item.companyId === admin.companyId
-    ));
-    if (certification) await saveCertification(store, { ...certification, status: 'revoked' });
+
     res.json({ ok: true });
     return;
   }
@@ -903,140 +907,126 @@ app.delete('/api/employees/:id', asyncRoute(async (req, res) => {
   res.json({ ok: true });
 }));
 
-app.get('/api/employee/companies', asyncRoute(async (req, res) => {
-  requireEmployee(req);
-  const items = (await managedCompanies())
-    .filter((item) => item.id)
-    .map((item) => ({ id: item.id, name: item.name || '', shortName: item.shortName || '' }));
-  res.json({ items });
-}));
+// Certification is retired. Old clients cannot acquire permissions through it.
+app.all(['/api/employee/certification', '/api/certifications', '/api/certifications/:id/:action'], (req, res) => {
+  res.status(410).json({ error: { code: 'CERTIFICATION_REMOVED', message: '企业认证已取消，请联系管理员分配名片权限' } });
+});
 
-app.get('/api/employee/certification', asyncRoute(async (req, res) => {
-  const user = requireEmployee(req);
-  const applications = (await listCertifications(store)).filter((item) => item.personId === user.id);
-  const present = (item) => ({
-    id: item.id,
-    companyId: item.companyId,
-    companyName: item.companyName || '',
-    status: item.status,
-  });
-  const certified = applications.filter((item) => item.status === 'approved').map(present);
+async function permissionCompanies(admin) {
+  return (await managedCompanies()).filter((company) => admin.scope !== 'company' || company.id === admin.companyId);
+}
+
+app.get('/api/card-permission-policy', asyncRoute(async (req, res) => {
+  requireAdmin(req);
+  const admin = adminOf(req);
+  const root = await store.getCompany('default');
   res.json({
-    certified,
-    pending: applications.filter((item) => item.status === 'pending').map(present),
+    enabled: admin.scope === 'hq' && defaultPermissionEnabled(),
+    policy: admin.scope === 'hq' ? (root.defaultCardPermission || { level: 1, companyIds: [] }) : null,
+    companies: (await permissionCompanies(admin)).map(({ id, name }) => ({ id, name })),
   });
 }));
 
-app.post('/api/employee/certification', asyncRoute(async (req, res) => {
-  const user = requireEmployee(req);
-  const companyId = text(req.body && req.body.companyId, 40);
-  if (!companyId) throw httpError(400, 'VALIDATION_ERROR', '请选择企业');
-  const company = (await managedCompanies()).find((item) => item.id === companyId);
-  if (!company) throw httpError(404, 'NOT_FOUND', '公司不存在');
-  if (!company.id) throw httpError(400, 'VALIDATION_ERROR', '请选择企业');
-  const applications = await listCertifications(store);
-  const sameCompany = (item, status) => item.personId === user.id && item.companyId === company.id && item.status === status;
-  if (applications.some((item) => sameCompany(item, 'approved'))) {
-    throw httpError(409, 'ALREADY_CERTIFIED', '账号已认证该企业');
-  }
-  const now = nowIso();
-  const existing = applications.find((item) => sameCompany(item, 'pending'));
-  const autoApproved = isReviewCompany(company.id);
-  const row = await saveCertification(store, {
-    id: existing ? existing.id : undefined,
-    personId: user.id,
-    legacyCardId: text(req.body && req.body.cardId, 40),
-    companyId: company.id,
-    companyName: company.name || '',
-    name: user.name || '',
-    phone: user.authPhone || user.phone || '',
-    title: user.title || '',
-    status: autoApproved ? 'approved' : 'pending',
-    createdAt: existing ? existing.createdAt : now,
-  });
-  res.status(existing ? 200 : 201).json({
-    alreadyPending: !!existing,
-    autoApproved,
-    application: {
-      id: row.id,
-      companyId: row.companyId,
-      companyName: row.companyName,
-      status: row.status,
+app.put('/api/card-permission-policy', asyncRoute(async (req, res) => {
+  requireAdmin(req);
+  if (adminOf(req).scope !== 'hq') throw httpError(403, 'FORBIDDEN', '只有总管理员可以设置默认权限');
+  if (!defaultPermissionEnabled()) throw httpError(403, 'DEFAULT_PERMISSION_DISABLED', '请先在配置文件开启默认名片权限策略');
+  const policy = normalizePermission(req.body || {});
+  await validatePermissionCompanies(policy);
+  const root = await store.getCompany('default');
+  await store.saveCompanyRecord('default', { ...root, defaultCardPermission: policy });
+  res.json({ ok: true, policy });
+}));
+
+async function validatePermissionCompanies(permission) {
+  const ids = new Set((await managedCompanies()).map((company) => company.id));
+  if ((permission.companyIds || []).some((id) => !ids.has(id))) throw httpError(400, 'VALIDATION_ERROR', '授权企业不存在');
+}
+
+function permissionAccountVisible(person, admin) {
+  return admin.scope === 'hq' || personRelatedToCompany(person, admin.companyId);
+}
+
+function permissionAccount(person, admin, root) {
+  const permission = effectivePermission(person, root);
+  const cards = ensureCards(person).cards.filter((card) => card.lifecycle === 'active'
+    && (admin.scope === 'hq' || card.companyId === admin.companyId));
+  const card = cards.find((item) => item.id === person.activeCardId) || cards[0];
+  return {
+    id: person.id,
+    name: card ? card.name : (admin.scope === 'hq' ? person.name : ''),
+    phone: person.authPhone || person.accountPhone || '',
+    status: person.status,
+    permission: admin.scope === 'hq' ? permission : {
+      level: canManageCompany(permission, admin.companyId) ? 2 : 1,
+      companyIds: canManageCompany(permission, admin.companyId) ? [admin.companyId] : [],
+      source: permission.source,
     },
-  });
-}));
+    individual: !!person.cardPermission,
+    locked: admin.scope === 'company' && (!!person.cardPermission || permission.level === 3),
+  };
+}
 
-app.get('/api/certifications', asyncRoute(async (req, res) => {
+app.get('/api/account-permissions', asyncRoute(async (req, res) => {
   requireAdmin(req);
   const admin = adminOf(req);
-  const items = (await listCertifications(store))
-    .filter((item) => item.status === 'pending' || item.status === 'approved')
-    .filter((item) => admin.scope !== 'company' || item.companyId === admin.companyId)
-    .map((item) => ({
-      id: item.id,
-      personId: item.personId,
-      cardId: item.legacyCardId || '',
-      companyId: item.companyId,
-      companyName: item.companyName || '',
-      name: item.name || '',
-      phone: item.phone || '',
-      title: item.title || '',
-      status: item.status,
-      createdAt: item.createdAt,
-    }));
+  const root = await store.getCompany('default');
+  const people = await store.listPeople({ kind: 'employee' });
+  const q = String(req.query.q || '').trim();
+  const items = people.filter((person) => permissionAccountVisible(person, admin))
+    .map((person) => permissionAccount(person, admin, root))
+    .filter((person) => !q || (person.name || '').includes(q) || person.phone.includes(q));
   res.json({ items });
 }));
 
-app.post('/api/certifications/:id/approve', asyncRoute(async (req, res) => {
+async function updateAccountPermission(person, admin, body) {
+  const root = await store.getCompany('default');
+  if (admin.scope === 'company' && effectivePermission(person, root).level === 3) {
+    throw httpError(403, 'FORBIDDEN', '全企业权限只能由总管理员修改');
+  }
+  const next = setPermission(person, admin, body);
+  if (next.cardPermission) await validatePermissionCompanies(next.cardPermission);
+  next.updatedAt = nowIso();
+  return next;
+}
+
+app.put('/api/account-permissions/:id', asyncRoute(async (req, res) => {
   requireAdmin(req);
   const admin = adminOf(req);
-  const row = (await listCertifications(store)).find((item) => item.id === req.params.id);
-  if (!row || row.status !== 'pending') throw httpError(404, 'NOT_FOUND', '申请不存在');
-  if (admin.scope === 'company' && row.companyId !== admin.companyId) {
-    throw httpError(403, 'FORBIDDEN', '只能审核本公司的申请');
+  const person = await store.getPerson(req.params.id);
+  if (!person || person.kind !== 'employee' || !permissionAccountVisible(person, admin)) {
+    throw httpError(404, 'NOT_FOUND', '账号不存在');
   }
-  const person = await store.getPerson(row.personId);
-  if (!person || person.kind !== 'employee') throw httpError(404, 'NOT_FOUND', '员工不存在');
-  const company = await store.getCompany(row.companyId);
-  if (!company) throw httpError(404, 'NOT_FOUND', '公司不存在');
-  await saveCertification(store, { ...row, status: 'approved' });
+  const next = await updateAccountPermission(person, admin, req.body || {});
+  await store.updatePerson(person.id, next);
   res.json({ ok: true });
 }));
 
-app.post('/api/certifications/:id/reject', asyncRoute(async (req, res) => {
+app.post('/api/account-permissions', asyncRoute(async (req, res) => {
   requireAdmin(req);
   const admin = adminOf(req);
-  const row = (await listCertifications(store)).find((item) => item.id === req.params.id);
-  if (!row || row.status !== 'pending') throw httpError(404, 'NOT_FOUND', '申请不存在');
-  if (admin.scope === 'company' && row.companyId !== admin.companyId) {
-    throw httpError(403, 'FORBIDDEN', '只能审核本公司的申请');
-  }
-  await saveCertification(store, { ...row, status: 'rejected' });
-  res.json({ ok: true });
-}));
-
-app.post('/api/certifications/:id/revoke', asyncRoute(async (req, res) => {
-  requireAdmin(req);
-  const admin = adminOf(req);
-  const row = (await listCertifications(store)).find((item) => item.id === req.params.id);
-  if (!row || row.status !== 'approved') throw httpError(404, 'NOT_FOUND', '认证不存在');
-  if (admin.scope === 'company' && row.companyId !== admin.companyId) {
-    throw httpError(403, 'FORBIDDEN', '只能取消本公司的认证');
-  }
-  const person = await store.getPerson(row.personId);
-  if (person && person.kind === 'employee') {
-    const next = archiveCompanyCards(person, row.companyId);
-    next.updatedAt = nowIso();
-    await store.updatePerson(person.id, next);
-  }
-  await saveCertification(store, { ...row, status: 'revoked' });
-  res.json({ ok: true });
+  const body = req.body || {};
+  const phone = normalizePhone(body.phone);
+  assertMobile(phone);
+  let person = await findOccupyingPhone(store, phone);
+  const exists = !!person;
+  if (!person) person = blankPerson({ id: 'emp-' + crypto.randomBytes(6).toString('hex'), accountPhone: phone });
+  const next = await updateAccountPermission(person, admin, body);
+  if (exists) await store.updatePerson(person.id, next);
+  else await store.insertPerson(next);
+  res.json({ ok: true, id: next.id, merged: exists });
 }));
 
 app.get('/api/employee/me', asyncRoute(async (req, res) => {
   const user = requireEmployee(req);
   const employee = toSelf(user);
   const root = await store.getCompany('default');
+  const permission = effectivePermission(user, root);
+  employee.cards = employee.cards.filter((card) => card.lifecycle !== 'deleted').map((card) => ({
+    ...card,
+    canEdit: card.lifecycle === 'active' && canManageCompany(permission, card.companyId),
+    canDelete: canManageCompany(permission, card.companyId),
+  }));
   const company = employee.companyId ? await store.getCompany(employee.companyId) : null;
   const cardCompanies = {};
   await Promise.all((employee.cards || []).map(async (card) => {
@@ -1049,29 +1039,27 @@ app.get('/api/employee/me', asyncRoute(async (req, res) => {
     employee,
     templateCompany: company ? publicCompany(companyForTemplate(company, root, employee.cardTemplate)) : null,
     cardCompanies,
+    permission,
+    canEdit: employee.cards.some((card) => card.id === employee.activeCardId && card.canEdit),
   });
 }));
 
 app.get('/api/employee/templates', asyncRoute(async (req, res) => {
   const user = requireEmployee(req);
   const root = await store.getCompany('default');
-  const approvedIds = await approvedCompanyIds(store, user.id);
+  const permission = effectivePermission(user, root);
+  const companies = (await managedCompanies()).filter((company) => canManageCompany(permission, company.id));
   const items = [];
   for (const template of allTemplates(root)) {
-    for (const companyId of template.companyIds || []) {
-      if (!approvedIds.has(companyId)) continue;
-      const company = await store.getCompany(companyId);
-      if (!company) continue;
+    for (const company of companies) {
+      if (permission.level !== 3 && !templateGrantedTo(root, template.id, company.id)) continue;
       items.push({
-        id: template.id,
-        name: template.name,
-        companyId,
-        companyName: company.name,
+        id: template.id, name: template.name, companyId: company.id, companyName: company.name,
         company: publicCompany(companyForTemplate(company, root, template.id)),
       });
     }
   }
-  res.json({ items });
+  res.json({ items, permission });
 }));
 
 app.put('/api/employee/me', asyncRoute(async (req, res) => {
@@ -1084,17 +1072,18 @@ app.post('/api/employee/cards', asyncRoute(async (req, res) => {
   const user = requireEmployee(req);
   const template = text(req.body && req.body.template, 20);
   const companyId = text(req.body && req.body.companyId, 40);
-  if (!companyId) throw httpError(400, 'VALIDATION_ERROR', '请选择已认证企业');
+  if (!companyId) throw httpError(400, 'VALIDATION_ERROR', '请选择企业');
   const root = await store.getCompany('default');
   const selected = allTemplates(root).find((item) => item.id === template);
   if (!selected) throw httpError(400, 'VALIDATION_ERROR', '模板不存在');
-  if (!templateGrantedTo(root, template, companyId)) {
+  const permission = effectivePermission(user, root);
+  assertManageCompany(permission, companyId);
+  if (permission.level !== 3 && !templateGrantedTo(root, template, companyId)) {
     throw httpError(403, 'TEMPLATE_FORBIDDEN', '该企业未分配此模板');
   }
-  const approvedIds = await approvedCompanyIds(store, user.id);
-  if (!approvedIds.has(companyId)) throw httpError(403, 'TEMPLATE_FORBIDDEN', '请先完成该企业认证');
+
   const company = await store.getCompany(companyId);
-  if (!company) throw httpError(404, 'NOT_FOUND', '公司不存在');
+  if (!reviewCompanyVisible(company)) throw httpError(404, 'NOT_FOUND', '公司不存在');
   const cardOptions = {
     companyId,
     company: company.name,
@@ -1124,11 +1113,13 @@ app.put('/api/employee/cards/active', asyncRoute(async (req, res) => {
 
 app.delete('/api/employee/cards/:cardId', asyncRoute(async (req, res) => {
   const user = requireEmployee(req);
-  const card = ensureCards(user).cards.find((item) => item.id === req.params.cardId);
+  const card = ensureCards(user).cards.find((item) => item.id === req.params.cardId && item.lifecycle !== 'deleted');
   if (!card) throw httpError(404, 'NOT_FOUND', '名片不存在');
+  assertManageCompany(effectivePermission(user, await store.getCompany('default')), card.companyId);
   let next;
   try {
-    next = removeCard(user, req.params.cardId);
+    next = projectActive({ ...user, cards: user.cards.map((item) => item.id === card.id
+      ? { ...item, lifecycle: 'deleted', deletedAt: nowIso() } : item) });
   } catch (err) {
     throw httpError(err.status || 400, err.code || 'VALIDATION_ERROR', err.message || '无法删除名片');
   }

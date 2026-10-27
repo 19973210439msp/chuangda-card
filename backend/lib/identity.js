@@ -6,7 +6,9 @@ async function findOccupyingPhone(store, phone) {
   const target = normalizePhone(phone);
   if (!target) return null;
   const people = await store.listPeople({ kind: 'employee' });
-  return people.find((person) => person.status !== 'closed' && normalizePhone(identityPhone(person)) === target) || null;
+  const matches = people.filter((person) => person.status !== 'closed' && normalizePhone(identityPhone(person)) === target);
+  if (matches.length > 1) throw httpError(409, 'PHONE_CONFLICT', '该手机号对应多个账号，请联系总管理员处理');
+  return matches[0] || null;
 }
 
 async function assertPhoneAvailable(store, phone, exceptId) {

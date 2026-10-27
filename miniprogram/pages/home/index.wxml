@@ -15,7 +15,7 @@
       <view class="lite-wrap">
         <view class="gold-dot"></view>
         <view class="lite">
-        <view class="lite-item" hover-class="lite-on" bindtap="onEdit">
+        <view class="lite-item" wx:if="{{canEdit}}" hover-class="lite-on" bindtap="onEdit">
           <image src="/assets/icons/edit-card.png" mode="aspectFit"></image>
           <text>编辑</text>
         </view>
@@ -28,7 +28,7 @@
           <image src="/assets/icons/switch-card.png" mode="aspectFit"></image>
           <text>切换</text>
         </view>
-        <view class="lite-item" hover-class="lite-on" bindtap="onStyle">
+        <view class="lite-item" wx:if="{{canEdit}}" hover-class="lite-on" bindtap="onStyle">
           <image src="/assets/icons/card-style.png" mode="aspectFit"></image>
           <text>名片样式</text>
         </view>
@@ -38,8 +38,9 @@
     <view class="guide empty-card-guide" wx:else>
       <text class="guide-title">{{emptyState.title}}</text>
       <text class="guide-desc">{{emptyState.description}}</text>
-      <button class="guide-action" bindtap="onEmptyAction">{{emptyState.action}}</button>
+      <button class="guide-action" wx:if="{{emptyState.action}}" bindtap="onEmptyAction">{{emptyState.action}}</button>
     </view>
+    <button class="primary" wx:if="{{hasCard && canCreate}}" bindtap="onCreate">创建名片</button>
     <view class="error" wx:if="{{error}}">{{error}}</view>
     <view class="guide" wx:if="{{needPhone}}" bindtap="onBindPhone">
       <text class="guide-title">绑定手机号</text>

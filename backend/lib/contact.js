@@ -5,9 +5,9 @@ const { claimImportedCard } = require('./claim');
 const { blankPerson, nowIso } = require('./person');
 const { consumeCode } = require('./verify');
 const { phoneFromWechatCode } = require('./wechat');
-const { writeActive, assignCardCompany, ensureCards } = require('./cards');
-const { approvedCompanyIds } = require('./certifications');
-const { templateGrantedTo } = require('./templates');
+const { writeActive, assignCardCompany, ensureCards, activeCard } = require('./cards');
+const { effectivePermission, assertManageCompany } = require('./cardPermissions');
+const { templateGrantedTo, allTemplates } = require('./templates');
 const {
   text,
   normalizePhone,
@@ -22,6 +22,20 @@ function dropWechatQr(list) {
 }
 
 async function saveSelfCard(store, person, body) {
+  const root = await store.getCompany('default');
+  const permission = effectivePermission(person, root);
+  const active = activeCard(person);
+  if (!active) throw httpError(409, 'NO_ACTIVE_CARD', '请联系管理员分配名片');
+  assertManageCompany(permission, active.companyId);
+  if (body.companyId !== undefined) assertManageCompany(permission, String(body.companyId || ''));
+  const templateId = body.cardTemplate === undefined ? active.template : String(body.cardTemplate);
+  const selected = allTemplates(root).find((template) => template.id === templateId);
+  if (!selected) throw httpError(400, 'VALIDATION_ERROR', '模板不存在');
+  const wantedCompanyId = body.companyId === undefined ? active.companyId : String(body.companyId || '');
+  if ((templateId !== active.template || wantedCompanyId !== active.companyId)
+    && permission.level !== 3 && !templateGrantedTo(root, templateId, wantedCompanyId)) {
+    throw httpError(403, 'TEMPLATE_FORBIDDEN', '该企业未获得这套名片模板');
+  }
   const next = { ...person, attachments: Array.isArray(person.attachments) ? person.attachments.slice() : [] };
   if (body.name !== undefined) next.name = text(body.name, 40);
   if (body.company !== undefined) next.company = text(body.company, 80);
@@ -54,25 +68,13 @@ async function saveSelfCard(store, person, body) {
     email: next.email,
     address: next.address,
     attachments: next.attachments,
+    cardTemplate: templateId,
+    templateName: selected.name,
   });
   if (body.companyId !== undefined) {
     const wanted = String(body.companyId || '');
-    const ready = ensureCards(person);
-    const active = ready.cards.find((card) => card.id === ready.activeCardId) || ready.cards[0];
-    if (!active) throw httpError(409, 'NO_ACTIVE_CARD', '请先通过企业认证并创建名片');
-    if (!wanted) throw httpError(400, 'VALIDATION_ERROR', '请选择已认证企业');
-    const owned = String(active.companyId || '');
-    const allowed = await approvedCompanyIds(store, person.id);
-    if (owned) allowed.add(owned);
-    if (!allowed.has(wanted)) {
-      throw httpError(403, 'FORBIDDEN', '只能选择已认证企业');
-    }
-    const root = await store.getCompany('default');
-    if (!templateGrantedTo(root, active.template, wanted)) {
-      throw httpError(403, 'TEMPLATE_FORBIDDEN', '该企业未获得这套名片模板');
-    }
     const company = await store.getCompany(wanted);
-    if (!company) throw httpError(404, 'NOT_FOUND', '企业不存在');
+    if (!company || company.reviewOnly) throw httpError(404, 'NOT_FOUND', '企业不存在');
     const assigned = assignCardCompany(synced, synced.activeCardId, wanted, company.name || '');
     if (assigned) synced = assigned;
   }

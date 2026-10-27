@@ -10,6 +10,8 @@ Page({
     company: null,
     summary: null,
     hasCard: false,
+    canEdit: false,
+    canCreate: false,
     emptyState: emptyCardState({}),
     needGuide: false,
     needPhone: false,
@@ -30,18 +32,18 @@ Page({
       request({ url: '/api/employee/me' }),
       request({ url: '/api/analytics/summary' }),
       request({ url: '/api/employee/templates' }),
-      request({ url: '/api/employee/certification' }),
-    ]).then(([me, summary, available, certification]) => {
+    ]).then(([me, summary, available]) => {
       const hasCard = !!(me.employee && me.employee.activeCardId);
       this.setData({
         card: decorateCard(me.employee),
         company: decorateCompany(me.templateCompany),
         hasCard,
+        canEdit: !!me.canEdit,
+        canCreate: !!(available.items || []).length,
         emptyState: emptyCardState({
           hasCard,
           templates: available.items || [],
-          certified: certification.certified || [],
-          pending: certification.pending || [],
+          permission: me.permission,
         }),
         summary: (summary.items && summary.items[0]) || {
           interestIndex: 0,
@@ -49,7 +51,7 @@ Page({
           visitors: 0,
           avgDurationSec: 0,
         },
-        needGuide: !!(me.employee && me.employee.activeCardId && !me.employee.name),
+        needGuide: !!(me.canEdit && me.employee && me.employee.activeCardId && !me.employee.name),
         needPhone: !(me.employee && me.employee.phone),
         error: '',
       });
@@ -58,28 +60,30 @@ Page({
   onFlip() {
     this.setData({ flipped: !this.data.flipped });
   },
+  onCreate() {
+    if (this.data.canCreate) wx.navigateTo({ url: '/pages/home/switch?mode=create' });
+  },
   onSwitch() {
     wx.navigateTo({ url: '/pages/home/switch?mode=switch' });
   },
   onStyle() {
+    if (!this.data.canEdit && !this.data.canCreate) return;
     wx.navigateTo({ url: '/pages/home/switch?mode=style' });
   },
   onEdit() {
+    if (!this.data.canEdit) return;
     if (!this.data.hasCard) {
       wx.navigateTo({ url: '/pages/home/switch?mode=style' });
       return;
     }
     wx.navigateTo({ url: '/pages/home/edit' });
   },
-  onCert() {
-    wx.navigateTo({ url: '/pages/mine/cert' });
-  },
   onEmptyAction() {
     if (this.data.emptyState.kind === 'ready') {
-      this.onStyle();
+      wx.navigateTo({ url: '/pages/home/switch?mode=create' });
       return;
     }
-    this.onCert();
+    wx.showToast({ title: '请联系管理员分配名片或权限', icon: 'none' });
   },
   onBindPhone() {
     wx.showModal({

@@ -237,6 +237,7 @@ th, td { text-align: left; padding: 13px 12px; border-bottom: 1px solid var(--li
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.cards-table .cell-clip small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
 .cards-table .ops { overflow: visible; }
 .cards-table .inline-actions { justify-content: flex-start; flex-wrap: nowrap; gap: 6px; white-space: nowrap; }
 .cards-table .inline-actions .btn { flex: none; min-height: 30px; padding-inline: 8px; font-size: 12px; }

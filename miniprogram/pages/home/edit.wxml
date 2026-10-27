@@ -11,7 +11,7 @@
       <text class="company-pick-text">{{companyNames[companyIndex] || '总公司'}}</text>
       <text class="company-pick-more">选择</text>
     </view>
-    <text class="hint">总公司可直接选择。已认证的子公司都会出现在这里，请自行选择要写到这张名片上的公司。</text>
+    <text class="hint">仅可选择当前名片权限及模板允许使用的企业。跨企业修改需要同时拥有原企业和目标企业的名片权限。</text>
     <text class="label">职业</text>
     <input class="input" always-embed="{{true}}" adjust-position="{{true}}" cursor-spacing="96" data-key="title" value="{{form.title}}" bindinput="onInput" />
     <text class="label">手机号</text>

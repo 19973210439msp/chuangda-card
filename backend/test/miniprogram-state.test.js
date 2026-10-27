@@ -8,11 +8,12 @@ const {
   cardDetailRequest,
 } = require('../../miniprogram/utils/favorite-flow');
 
-test('zero-card home guides the employee according to certification and templates', () => {
-  assert.equal(emptyCardState({}).kind, 'uncertified');
-  assert.equal(emptyCardState({ pending: [{}] }).kind, 'pending');
-  assert.equal(emptyCardState({ certified: [{}] }).kind, 'waiting-template');
-  const ready = emptyCardState({ certified: [{}], templates: [{}, {}, {}] });
+test('zero-card home guides according to permissions without a certification entry', () => {
+  assert.equal(emptyCardState({}).kind, 'ordinary');
+  assert.equal(emptyCardState({}).action, '');
+  assert.match(emptyCardState({}).description, /联系管理员/);
+  assert.equal(emptyCardState({ permission: { level: 2 } }).kind, 'ordinary');
+  const ready = emptyCardState({ templates: [{}, {}, {}], permission: { level: 2 } });
   assert.equal(ready.kind, 'ready');
   assert.equal(ready.action, '创建名片');
   assert.match(ready.description, /3 套可用模板/);

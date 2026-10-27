@@ -120,6 +120,22 @@ test('public card state distinguishes no card, archived card and inactive accoun
   assert.equal(publicCardState(unassigned).code, 'CARD_UNASSIGNED');
 });
 
+test('soft-deleted cards stay unavailable after startup migration and do not consume the card limit', () => {
+  const person = blankPerson({
+    id: 'deleted-history', authPhone: '13910000001', activeCardId: 'old-0',
+    cards: Array.from({ length: 8 }, (_, index) => ({
+      id: 'old-' + index, template: 'classic', companyId: 'default',
+      lifecycle: 'deleted', deletedAt: '2026-10-01T00:00:00.000Z',
+    })),
+  });
+  const migrated = migratedPerson(person);
+  assert.equal(migrated.activeCardId, '');
+  assert.equal(publicCardState(migrated, 'old-0').code, 'CARD_DELETED');
+  const next = addCard(migrated, 'classic', { companyId: 'default' });
+  assert.equal(next.cards.filter((card) => card.lifecycle === 'active').length, 1);
+  assert.equal(next.cards[0].deletedAt, '2026-10-01T00:00:00.000Z');
+});
+
 test('legacy card migration persists lifecycle and source without inventing a card', async () => {
   const legacy = {
     id: 'emp-legacy', kind: 'employee', status: 'active', activeCardId: 'card-old',

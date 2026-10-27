@@ -18,6 +18,7 @@ function blankPerson(partial) {
     department: partial.department || '',
     phone: partial.phone || '',
     authPhone: partial.authPhone || '',
+    accountPhone: partial.accountPhone || '',
     cardTemplate: partial.cardTemplate || (partial.kind === 'ocr' ? OCR_DEFAULT_TEMPLATE : 'classic'),
     activeCardId: partial.activeCardId || '',
     cards: Array.isArray(partial.cards) ? partial.cards : [],
@@ -179,6 +180,7 @@ function toSelf(person) {
   return {
     ...toCard(view),
     authPhone: view.authPhone || '',
+    accountPhone: view.accountPhone || view.authPhone || '',
     cards: (view.cards || []).map(presentCard),
   };
 }

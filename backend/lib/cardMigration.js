@@ -1,4 +1,4 @@
-const CARD_LIFECYCLES = new Set(['draft', 'active', 'archived']);
+const CARD_LIFECYCLES = new Set(['draft', 'active', 'archived', 'deleted']);
 
 function normalizeLegacyCard(card, index) {
   if (!card || typeof card !== 'object') return card;
@@ -20,7 +20,8 @@ function migratedPerson(person) {
   const currentIsActive = activeCards.some((card) => card.id === person.activeCardId);
   const fallback = activeCards.find((card) => card.isDefault) || activeCards[0] || null;
   const activeCardId = currentIsActive ? person.activeCardId : (fallback ? fallback.id : '');
-  return { ...person, cards, activeCardId };
+  const accountPhone = person.accountPhone || person.authPhone || person.phone || '';
+  return { ...person, cards, activeCardId, accountPhone };
 }
 
 async function migrateCardRecords(store) {
@@ -29,7 +30,7 @@ async function migrateCardRecords(store) {
   for (const person of people) {
     const next = migratedPerson(person);
     if (JSON.stringify(next.cards) === JSON.stringify(person.cards)
-      && next.activeCardId === person.activeCardId) continue;
+      && next.activeCardId === person.activeCardId && next.accountPhone === person.accountPhone) continue;
     await store.updatePerson(person.id, next);
     updated += 1;
   }

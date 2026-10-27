@@ -2,7 +2,7 @@ const app = document.querySelector('#app');
 const views = [
   ['overview', '工作台'],
   ['companies', '子公司'],
-  ['cert', '员工认证'],
+  ['cert', '账号名片权限'],
   ['cards', '名片管理'],
   ['templates', '模板管理'],
   ['import', '批量导入'],
@@ -13,7 +13,7 @@ const views = [
 const viewDescriptions = {
   overview: '查看待办事项与名片使用情况',
   companies: '管理集团与子公司资料',
-  cert: '处理员工的企业认证申请',
+  cert: '设置小程序账号的名片操作权限，与后台管理员身份独立',
   cards: '维护员工资料与对外名片',
   templates: '管理名片样式与使用范围',
   import: '批量创建或更新员工名片',
@@ -38,7 +38,9 @@ const state = {
   importIssues: [],
   admin: null,
   companies: [],
-  certifications: [],
+  permissionAccounts: [],
+  permissionPolicy: { companies: [], enabled: false },
+  permissionQuery: '',
   templates: [],
   editingTemplate: '',
   previewTemplate: '',
@@ -125,25 +127,13 @@ function shell(title, body) {
 
 function dashboardHtml() {
   const employees = state.employees.filter((item) => item.status !== 'closed');
-  const cardCount = employees.reduce((count, item) => count + (item.cards || []).length, 0);
-  const pending = (state.certifications || []).filter((item) => item.status === 'pending');
-  const companyCount = (state.companies || []).length;
-  const hq = !state.admin || state.admin.scope !== 'company';
-  const metrics = [
-    ['员工名片', cardCount, '当前在用的名片总数'],
-    ['在职员工', employees.filter((item) => item.status === 'active').length, '可正常使用的员工账号'],
-    ['待审核', pending.length, pending.length ? '有申请需要处理' : '当前没有待处理申请'],
-    ...(hq ? [['集团公司', companyCount, '已建立的公司档案']] : []),
-  ];
+  const cardCount = employees.reduce((count, item) => count + (item.cards || []).filter((card) => card.lifecycle === 'active').length, 0);
   return shell('工作台', `
-    <div class="overview-heading"><div><h2>业务概览</h2><p class="muted">名片和员工认证的实时数据</p></div><a class="btn" href="#/cards">管理名片</a></div>
-    <div class="stat-row">${metrics.map(([label, count, detail]) => `<div class="stat"><span>${label}</span><b>${count}</b><small>${detail}</small></div>`).join('')}</div>
-    <div class="overview-grid">
-      <section class="panel action-panel"><div class="panel-heading"><div><p class="panel-kicker">待办事项</p><h2>员工认证</h2></div><a class="text-link" href="#/cert">查看全部 <span aria-hidden="true">→</span></a></div>
-        ${pending.length ? `<p class="action-count">${pending.length} <span>项申请等待审核</span></p><ul class="pending-list">${pending.slice(0, 4).map((item) => `<li><span class="avatar" aria-hidden="true">${esc((item.name || '员').slice(0, 1))}</span><span><strong>${esc(item.name || '未命名员工')}</strong><small>${esc(item.companyName || item.title || '企业认证申请')}</small></span><span class="tag">待审核</span></li>`).join('')}</ul>` : '<div class="empty-state"><span aria-hidden="true">✓</span><strong>暂无待审核申请</strong><p>新的员工认证申请会出现在这里。</p></div>'}
-      </section>
-      <section class="panel quick-panel"><p class="panel-kicker">快捷入口</p><h2>常用操作</h2><div class="quick-links"><a href="#/cards"><span class="quick-icon" aria-hidden="true">＋</span><span><strong>名片管理</strong><small>查看、编辑和新建名片</small></span><span aria-hidden="true">→</span></a><a href="#/import"><span class="quick-icon" aria-hidden="true">⇧</span><span><strong>批量导入</strong><small>导入表格或文件</small></span><span aria-hidden="true">→</span></a><a href="#/templates"><span class="quick-icon" aria-hidden="true">◫</span><span><strong>模板管理</strong><small>查看并分配名片模板</small></span><span aria-hidden="true">→</span></a></div></section>
-    </div>`);
+    <section class="panel"><h2>业务概览</h2><div class="stat-row">
+      <div class="stat"><span>有效名片</span><b>${cardCount}</b></div>
+      <div class="stat"><span>员工账号</span><b>${employees.length}</b></div>
+    </div><p class="lede">名片由管理员发放；账号名片权限只控制员工对本人名片的操作，不授予后台管理员身份。</p>
+    <div class="quick-links"><a class="btn" href="#/cards">管理名片</a><a class="btn secondary" href="#/cert">账号名片权限</a><a class="btn secondary" href="#/import">批量导入</a></div></section>`);
 }
 
 function renderLogin(message) {
@@ -221,7 +211,7 @@ function targetCompanyField(name, selected) {
 
 function assertTemplateAssignment(templateId, companyId) {
   const template = (state.templates || []).find((item) => item.id === templateId);
-  if (!template || !(template.companyIds || []).includes(companyId)) {
+  if (!template || (state.admin.scope !== 'hq' && !(template.companyIds || []).includes(companyId))) {
     throw new Error('所选模板未分配给目标企业，请重新选择');
   }
 }
@@ -267,19 +257,20 @@ function cardsHtml() {
     return (cards.length ? cards : [{}]).map((card, index) => {
       const nameText = card.name || item.name || '未命名';
       const companyText = card.company || item.company || '';
-      const currentTemplate = card.templateLabel || templateName(card.template);
+      const currentTemplate = card.id ? (card.templateLabel || templateName(card.template)) : '尚未创建名片';
+      const accountPhone = item.accountPhone || item.authPhone || '';
       return `
     <tr>
-      <td data-label="姓名" title="${esc(nameText)}"><span class="cell-clip">${esc(nameText)}${card.isDefault ? '<span class="tag default-card">默认</span>' : ''}</span></td>
+      <td data-label="姓名" title="${esc(nameText)}"><span class="cell-clip">${esc(nameText)}${card.isDefault ? '<span class="tag default-card">默认</span>' : ''}${accountPhone ? `<small>账号 ${esc(accountPhone)}</small>` : ''}</span></td>
       <td data-label="公司" title="${esc(companyText)}"><span class="cell-clip">${esc(companyText)}</span></td>
       <td data-label="职位" title="${esc(card.title || '')}"><span class="cell-clip">${esc(card.title || '')}</span></td>
-      <td data-label="手机" title="${esc(card.phone || item.phone || '')}"><span class="cell-clip">${esc(card.phone || item.phone || '')}</span></td>
+      <td data-label="名片电话" title="${esc(card.phone || '')}"><span class="cell-clip">${esc(card.phone || '')}</span></td>
       <td data-label="邮箱" title="${esc(card.email || item.email || '')}"><span class="cell-clip">${esc(card.email || item.email || '')}</span></td>
       <td data-label="所用模板" title="${esc(currentTemplate)}"><span class="cell-clip">${esc(currentTemplate)}</span></td>
-      <td data-label="状态"><span class="tag ${esc(item.status)}">${statusLabel(item.status)}</span></td>
+      <td data-label="状态"><span class="tag ${esc(item.status)}">${card.lifecycle === 'deleted' ? '已删除' : card.lifecycle === 'archived' ? '已归档' : statusLabel(item.status)}</span></td>
       <td class="ops" data-label="操作">
         <div class="inline-actions">
-        <button class="btn secondary small" type="button" data-action="${card.id ? 'edit-card' : 'edit'}" data-id="${esc(item.id)}" ${card.id ? `data-card="${esc(card.id)}"` : ''}>编辑</button>
+        ${card.id ? (card.lifecycle === 'active' ? `<button class="btn secondary small" type="button" data-action="edit-card" data-id="${esc(item.id)}" data-card="${esc(card.id)}">编辑</button>` : '<span class="muted">历史记录</span>') : `<button class="btn secondary small" type="button" data-action="create-for" data-id="${esc(item.id)}">创建名片</button>`}
         ${index === 0 ? (item.status === 'closed' || item.status === 'disabled'
           ? `<button class="btn small" type="button" data-action="restore" data-id="${esc(item.id)}">恢复账号</button>`
           : `<button class="btn secondary small" type="button" data-action="disable" data-id="${esc(item.id)}">停用账号</button>`) : ''}
@@ -306,7 +297,7 @@ function cardsHtml() {
     <div class="toolbar">
       <form class="search" data-form="search">
         <label class="skip" for="q">搜索</label>
-        <input id="q" name="q" value="${esc(state.query)}" placeholder="搜索所有名片的姓名、手机、邮箱、公司">
+        <input id="q" name="q" value="${esc(state.query)}" placeholder="搜索姓名、账号手机号、名片电话、邮箱或公司">
         <button class="btn secondary" type="submit">搜索</button>
       </form>
       <button class="btn" type="button" data-action="create" ${noTemplates ? 'disabled title="当前企业没有可用模板"' : ''}>新建名片</button>
@@ -318,7 +309,7 @@ function cardsHtml() {
         <colgroup>
           <col class="col-name"><col class="col-company"><col class="col-title"><col class="col-phone"><col class="col-email"><col class="col-template"><col class="col-status"><col class="col-ops">
         </colgroup>
-        <thead><tr><th>姓名</th><th>公司</th><th>职位</th><th>手机</th><th>邮箱</th><th>所用模板</th><th>状态</th><th>操作</th></tr></thead>
+        <thead><tr><th>姓名 / 账号</th><th>公司</th><th>职位</th><th>名片电话</th><th>邮箱</th><th>所用模板</th><th>状态</th><th>操作</th></tr></thead>
         <tbody>${rows || '<tr><td colspan="8">没有匹配的名片</td></tr>'}</tbody>
       </table>
     </div>
@@ -352,45 +343,48 @@ function importHtml() {
     ${importIssuesHtml()}`);
 }
 
-function certRows(items, actionCell) {
-  const hq = !(state.admin && state.admin.scope === 'company');
-  return items.map((item) => `
-    <tr>
-      <td>${esc(item.name || '未命名')}</td>
-      <td>${esc(item.title)}</td>
-      <td>${esc(item.phone)}</td>
-      ${hq ? `<td>${esc(item.companyName)}</td>` : ''}
-      <td class="inline-actions">${actionCell(item)}</td>
-    </tr>`).join('');
+function permissionFields(permission = { level: 1, companyIds: [] }, hq = true) {
+  return `<label>名片操作权限<select name="level" required>
+    <option value="1" ${permission.level === 1 ? 'selected' : ''}>一级 · 普通名片权限</option>
+    <option value="2" ${permission.level === 2 ? 'selected' : ''}>二级 · 指定企业名片权限</option>
+    ${hq ? `<option value="3" ${permission.level === 3 ? 'selected' : ''}>三级 · 全企业名片权限</option>` : ''}
+  </select></label>
+  ${hq ? `<label>二级权限的授权企业（可多选）</label><div class="template-assignee-grid">${(state.permissionPolicy.companies || []).map((company) =>
+    `<label class="template-assignee-option"><input type="checkbox" name="companyIds" value="${esc(company.id)}" ${(permission.companyIds || []).includes(company.id) ? 'checked' : ''}><span>${esc(company.name)}</span></label>`
+  ).join('')}</div>` : '<p class="lede">二级权限仅限当前管理企业。</p>'}`;
 }
 
 function certHtml() {
-  const hq = !(state.admin && state.admin.scope === 'company');
-  const cols = hq ? 5 : 4;
-  const head = `<tr><th>员工</th><th>职位</th><th>手机</th>${hq ? '<th>公司</th>' : ''}<th>操作</th></tr>`;
-  const pending = (state.certifications || []).filter((item) => item.status === 'pending');
-  const approved = (state.certifications || []).filter((item) => item.status === 'approved');
-  const pendingRows = certRows(pending, (item) => `
-        <button class="btn small" type="button" data-action="approve-cert" data-id="${esc(item.id)}">通过</button>
-        <button class="btn secondary small" type="button" data-action="reject-cert" data-id="${esc(item.id)}">拒绝</button>`);
-  const approvedRows = certRows(approved, (item) => `
-        <button class="btn danger small" type="button" data-action="revoke-cert" data-id="${esc(item.id)}">取消认证</button>`);
-  return shell('员工认证', `
-    <div class="panel table-wrap">
-      <h3>待审核</h3>
-      <p class="lede">员工提交的企业认证在这里审核。通过后不会自动改名片上的公司，由员工自己在编辑名片里选择。取消认证后，名片上的该公司会被清掉，对应子公司管理员也不再看到这名员工。</p>
-      <table>
-        <thead>${head}</thead>
-        <tbody>${pendingRows || `<tr><td colspan="${cols}">没有待审核的申请</td></tr>`}</tbody>
-      </table>
-    </div>
-    <div class="panel table-wrap">
-      <h3>已认证</h3>
-      <table>
-        <thead>${head}</thead>
-        <tbody>${approvedRows || `<tr><td colspan="${cols}">还没有已通过的认证</td></tr>`}</tbody>
-      </table>
-    </div>`);
+  const hq = state.admin.scope !== 'company';
+  const policy = state.permissionPolicy;
+  const policyForm = hq && policy.enabled ? `<form class="panel" data-form="permission-policy">
+    <h3>所有未单独授权账号的默认权限</h3>
+    <p class="lede">覆盖小程序注册、管理员创建和批量导入账号。保存后对已有及新账号生效，不授予管理后台权限。</p>
+    ${permissionFields(policy.policy, true)}<button class="btn" type="submit">保存默认策略</button>
+  </form>` : '';
+  const rows = (state.permissionAccounts || []).map((item) => `<tr>
+    <td>${esc(item.name || '未填写姓名')}<br><small>${esc(item.phone || '未绑定手机号')}</small></td>
+    <td>${item.permission.level}级 · ${esc(item.permission.level === 3 ? '全企业' : item.permission.level === 2 ? (item.permission.companyIds || []).map((id) => (policy.companies || []).find((c) => c.id === id)?.name || id).join('、') : '仅查看、转发、切换')}</td>
+    <td>${esc({ individual: '总部单独设置', company: '企业单独设置', default: '默认策略', ordinary: '普通权限' }[item.permission.source] || '')}</td>
+    <td>${item.locked ? '由总管理员管理' : `<form data-form="account-permission">
+      <input type="hidden" name="id" value="${esc(item.id)}">
+      ${permissionFields(item.permission, hq)}
+      <button class="btn small" type="submit">保存权限</button>
+      ${hq ? `<button class="btn secondary small" type="button" data-action="reset-card-permission" data-id="${esc(item.id)}">恢复默认</button>` : ''}
+    </form>`}</td></tr>`).join('');
+  return shell('账号名片权限', `
+    ${policyForm}
+    <form class="panel" data-form="add-account-permission">
+      <h3>按手机号添加或设置权限</h3>
+      <p class="lede">仅设置小程序本人名片的操作能力，不会创建网页管理员。已存在的账号按手机号匹配；尚未注册的账号等待相同手机号登录领取。</p>
+      <label>账号手机号<input name="phone" type="tel" required maxlength="20"></label>
+      ${permissionFields({ level: 1, companyIds: [] }, hq)}
+      <button class="btn" type="submit">保存账号权限</button>
+    </form>
+    <section class="panel table-wrap">
+      <form class="search" data-form="permission-search"><label class="sr-only" for="permission-q">搜索账号</label><input id="permission-q" name="q" value="${esc(state.permissionQuery || '')}" placeholder="姓名或账号手机号"><button class="btn secondary">搜索</button></form>
+      <table><thead><tr><th>员工账号</th><th>当前有效权限</th><th>权限来源</th><th>设置</th></tr></thead><tbody>${rows || '<tr><td colspan="4">暂无账号。可按手机号添加本企业成员。</td></tr>'}</tbody></table>
+    </section>`);
 }
 
 function companiesHtml() {
@@ -444,6 +438,7 @@ function employeeDialog(item) {
       <form data-form="employee">
         <h3>${item.id ? '编辑名片' : '新建名片'}</h3>
         <p class="lede">${item.id ? '用下拉框选择要编辑的名片。保存只写入当前这一张。' : '先选择名片模板，再填写这张名片的内容。'}</p>
+        ${item.id ? `<p class="lede">账号手机号：${esc(item.accountPhone || item.authPhone || '未设置')}。修改下面的名片联系电话不会改变登录账号。</p>` : `<div>${field('accountPhone', '账号手机号', item.accountPhone, 'tel', true)}</div>`}
         <input type="hidden" name="id" value="${esc(item.id || '')}">
         <input type="hidden" name="cardId" value="${esc(item.editingCardId || '')}">
         ${item.id ? picker : targetCompanyField('companyId', item.companyId || 'default') + templateChooser('cardTemplate', item.cardTemplate)}
@@ -451,7 +446,7 @@ function employeeDialog(item) {
           <div>${field('name', '姓名', item.name)}</div>
           ${state.admin && state.admin.scope === 'company' ? '' : `<div>${field('department', '部门', item.department)}</div>`}
           <div>${field('title', '职务', item.title)}</div>
-          <div>${field('phone', '手机号', item.phone, 'tel', !item.id)}</div>
+          <div>${field('phone', '名片联系电话', item.phone, 'tel', !item.id)}</div>
           <div>${field('email', '邮箱', item.email, 'email')}</div>
           <div>${field('company', '公司', item.company)}</div>
         </div>
@@ -462,7 +457,7 @@ function employeeDialog(item) {
           const cid = card && card.companyId;
           if (!cid) return '';
           const company = (state.companies || []).find((c) => c.id === cid);
-          return company ? `<p class="lede">已认证子公司：${esc(company.name)}</p>` : '';
+          return company ? `<p class="lede">所属企业：${esc(company.name)}</p>` : '';
         })() : ''}
 
         ${state.admin && state.admin.scope === 'company' ? '' : `<label for="status">状态</label>
@@ -537,7 +532,7 @@ function templatesHtml() {
         <div><label for="qr-file">右下角公众号二维码</label><input id="qr-file" name="qrFile" type="file" accept="image/png,image/jpeg,image/webp"><p class="lede">${editing && editing.qrUrl ? '当前已上传；不选择文件会保留原二维码。' : 'PNG、JPG 或 WebP，最大 8 MB'}</p></div>
       </div>`}
       <fieldset class="template-assignees"><legend>分配给企业</legend>
-        <p class="template-assignee-help">勾选后，该企业管理员可使用此模板；认证通过的员工也可在小程序选择。总公司员工同样需要认证。</p>
+        <p class="template-assignee-help">勾选后，该企业管理员可使用此模板；拥有该企业二级名片权限的账号也可使用。三级名片权限可使用全部模板。</p>
         <div class="template-assignee-grid">${companyOptions.map((item) => `<label class="template-assignee-option"><input type="checkbox" name="companyIds" value="${esc(item.id)}" ${(editing && editing.companyIds || []).includes(item.id) ? 'checked' : ''}><span><strong>${esc(item.shortName || item.name)}</strong><small>${esc(item.name)}</small></span></label>`).join('') || '<p class="lede">请先创建子公司，再分配模板。</p>'}</div>
       </fieldset>
       <div class="template-form-actions"><button class="btn" type="submit">${editingBuiltIn ? '保存授权' : (editing ? '保存模板' : '创建名片模板')}</button>
@@ -642,18 +637,21 @@ async function loadView(view) {
     state.templates = (await api('/api/templates')).items || [];
   }
   if (view === 'overview') {
-    const [employees, certifications, companies] = await Promise.all([
+    const [employees, companies] = await Promise.all([
       api('/api/employees'),
-      api('/api/certifications'),
       state.admin.scope === 'company' ? Promise.resolve({ items: [] }) : api('/api/companies'),
     ]);
     state.employees = employees.items || [];
-    state.certifications = certifications.items || [];
     state.companies = companies.items || [];
   } else if (view === 'companies') {
     state.companies = (await api('/api/companies')).items || [];
   } else if (view === 'cert') {
-    state.certifications = (await api('/api/certifications')).items || [];
+    const [accounts, policy] = await Promise.all([
+      api('/api/account-permissions?q=' + encodeURIComponent(state.permissionQuery || '')),
+      api('/api/card-permission-policy'),
+    ]);
+    state.permissionAccounts = accounts.items || [];
+    state.permissionPolicy = policy;
   } else if (view === 'cards') {
     const [employees, companies] = await Promise.all([
       api('/api/employees?q=' + encodeURIComponent(state.query)),
@@ -786,6 +784,7 @@ async function saveEmployee(form) {
   const card = (state.editing && state.editing.cards || []).find((entry) => entry.id === data.cardId);
   const requirePhone = !data.cardId || !card || card.isDefault;
   if (requirePhone && !String(data.phone || '').trim()) throw new Error('创大产控模板的手机号不能为空');
+  if (!id && !String(data.accountPhone || '').trim()) throw new Error('账号手机号不能为空');
   if (!id) assertTemplateAssignment(data.cardTemplate, data.companyId);
   if (id) await api('/api/employees/' + id, { method: 'PUT', body: data });
   else await api('/api/employees', { method: 'POST', body: data });
@@ -814,6 +813,23 @@ document.addEventListener('submit', async (event) => {
     if (kind === 'search') {
       state.query = formData(form).q || '';
       await loadView('cards');
+      return;
+    }
+    if (kind === 'permission-search') {
+      state.permissionQuery = formData(form).q || '';
+      await loadView('cert');
+      return;
+    }
+    if (['account-permission', 'add-account-permission', 'permission-policy'].includes(kind)) {
+      const fields = formData(form);
+      const body = { level: Number(fields.level), companyIds: Array.from(form.querySelectorAll('input[name="companyIds"]:checked')).map((input) => input.value) };
+      let path = '/api/card-permission-policy';
+      let method = 'PUT';
+      if (kind === 'account-permission') path = '/api/account-permissions/' + encodeURIComponent(fields.id);
+      if (kind === 'add-account-permission') { path = '/api/account-permissions'; method = 'POST'; body.phone = fields.phone; }
+      await api(path, { method, body });
+      showNotice('名片权限已保存');
+      await loadView('cert');
       return;
     }
     if (kind === 'employee') {
@@ -1014,6 +1030,20 @@ document.addEventListener('click', async (event) => {
       paint();
       return;
     }
+    if (action === 'create-for') {
+      const found = state.employees.find((item) => item.id === id);
+      const initialTemplate = cardTemplateId('');
+      if (!found || !initialTemplate) return;
+      state.editing = {
+        status: found.status || 'active',
+        accountPhone: found.accountPhone || found.authPhone || '',
+        cardTemplate: initialTemplate,
+        companyId: 'default',
+        company: state.company ? state.company.name : '创大产控集团',
+      };
+      paint();
+      return;
+    }
     if (action === 'close-dialog') {
       state.editing = null;
       paint();
@@ -1065,15 +1095,9 @@ document.addEventListener('click', async (event) => {
       await loadView('cards');
       return;
     }
-    if (action === 'approve-cert' || action === 'reject-cert' || action === 'revoke-cert') {
-      const verb = action === 'approve-cert' ? 'approve' : action === 'reject-cert' ? 'reject' : 'revoke';
-      if (verb === 'revoke' && !window.confirm('取消后，这张名片上的该公司会被清除，对应子公司管理员将看不到这名员工。')) return;
-      await api('/api/certifications/' + encodeURIComponent(id) + '/' + verb, { method: 'POST', body: {} });
-      showNotice(verb === 'approve'
-        ? '已通过。员工可在编辑名片里选择这家公司'
-        : verb === 'revoke'
-          ? '已取消认证，该公司已从名片中移除'
-          : '已拒绝该申请');
+    if (action === 'reset-card-permission') {
+      await api('/api/account-permissions/' + encodeURIComponent(id), { method: 'PUT', body: { level: null } });
+      showNotice('已恢复默认名片权限');
       await loadView('cert');
       return;
     }

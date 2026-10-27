@@ -7,7 +7,7 @@ Page({
   data: {
     employee: null,
     phoneText: '',
-    certText: '未认证',
+    permissionText: '一级 · 普通名片权限',
     error: '',
     scrollHeight: 600,
   },
@@ -19,27 +19,17 @@ Page({
     request({ url: '/api/employee/me' }).then((data) => {
       const employee = data.employee || {};
       accounts.remember(employee);
-      return Promise.all([Promise.resolve(employee), request({ url: '/api/employee/certification' })]);
-    }).then(([employee, cert]) => {
-      const certified = (cert && cert.certified) || [];
-      const pending = (cert && cert.pending) || [];
-      let certText = '未认证';
-      if (certified.length > 1) certText = '已认证' + certified.length + '家';
-      else if (certified.length === 1) certText = '已认证';
-      else if (pending.length) certText = '审核中';
+      const level = (data.permission || {}).level || 1;
       this.setData({
         employee,
         phoneText: accounts.maskPhone(employee.authPhone || employee.phone),
-        certText,
+        permissionText: level === 3 ? '三级 · 全企业名片权限' : level === 2 ? '二级 · 指定企业名片权限' : '一级 · 普通名片权限',
         error: '',
       });
     }).catch((err) => this.setData({ error: err.message }));
   },
   onPhone() {
     wx.navigateTo({ url: '/pages/mine/phone' });
-  },
-  onCert() {
-    wx.navigateTo({ url: '/pages/mine/cert' });
   },
   onClose() {
     wx.showModal({

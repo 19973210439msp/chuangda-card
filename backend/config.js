@@ -22,9 +22,6 @@ function wechatSkipAllowed() {
   return process.env.SKIP_WECHAT_AUTH === 'true' && process.env.NODE_ENV !== 'production';
 }
 
-function reviewTestMode() {
-  return process.env.REVIEW_TEST_MODE === 'true';
-}
 
 function missingPgOssConfig() {
   const missing = [];
@@ -56,7 +53,6 @@ module.exports = {
   dataFile,
   uploadDir,
   wechatSkipAllowed,
-  reviewTestMode,
   missingPgOssConfig,
   assertPgOssConfig,
   publicBase,

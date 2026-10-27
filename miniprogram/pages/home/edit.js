@@ -27,18 +27,16 @@ Page({
     request({ url: '/api/employee/me' }).then((data) => {
       const form = Object.assign({ attachments: [] }, data.employee);
       const cardId = form.activeCardId || '';
-      if (!cardId) throw new Error('请先完成企业认证并创建名片');
-      return Promise.all([
-        Promise.resolve(form),
-        request({ url: '/api/employee/certification' }),
-      ]);
-    }).then(([form, cert]) => {
+      if (!cardId) throw new Error('请先创建名片或联系管理员分配');
+      if (!data.canEdit) throw new Error('没有当前名片的编辑权限，请联系管理员');
+      return Promise.all([Promise.resolve(form), request({ url: '/api/employee/templates' })]);
+    }).then(([form, available]) => {
       const choices = [];
-      ((cert && cert.certified) || []).forEach((item) => {
-        if (item && item.companyId) choices.push({ id: item.companyId, name: item.companyName || '已认证企业' });
+      (available.items || []).filter((item) => item.id === form.cardTemplate).forEach((item) => {
+        if (!choices.some((company) => company.id === item.companyId)) choices.push({ id: item.companyId, name: item.companyName });
       });
       if (form.companyId && !choices.some((item) => item.id === form.companyId)) {
-        choices.push({ id: form.companyId, name: form.company || '当前公司' });
+        choices.push({ id: form.companyId, name: form.company || '当前企业' });
       }
       let companyIndex = choices.findIndex((item) => item.id === form.companyId);
       if (companyIndex < 0) companyIndex = 0;

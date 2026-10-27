@@ -14,14 +14,16 @@ Page({
     draftTemplate: '',
     draftCompanyId: '',
     creating: false,
+    canEdit: false,
+    canCreate: false,
     error: '',
     scrollHeight: 600,
   },
   onLoad(options) {
-    const mode = options.mode === 'style' ? 'style' : 'switch';
+    const mode = ['style', 'create'].includes(options.mode) ? options.mode : 'switch';
     this.setData({
       mode,
-      title: mode === 'style' ? '名片样式' : '切换名片',
+      title: mode === 'switch' ? '切换名片' : mode === 'create' ? '创建名片' : '名片样式',
       scrollHeight: pageScrollHeight(),
     });
   },
@@ -71,11 +73,13 @@ Page({
           templateLabel: card.templateLabel,
         },
       }));
-      const cards = allCards.filter((card) => card.lifecycle !== 'archived');
+      const cards = allCards.filter((card) => card.lifecycle === 'active');
       const archivedCards = allCards.filter((card) => card.lifecycle === 'archived');
       this.setData({
         cards,
         archivedCards,
+        canEdit: !!me.canEdit,
+        canCreate: !!templates.length,
         company: brand,
         activeCardId: employee.activeCardId || '',
         templates,
@@ -102,12 +106,14 @@ Page({
   onDelete(event) {
     const cardId = event.currentTarget.dataset.id;
     if (!cardId) return;
-    const archived = (this.data.archivedCards || []).some((card) => card.id === cardId);
+    const card = this.data.cards.concat(this.data.archivedCards).find((item) => item.id === cardId);
+    if (!card || !card.canDelete) return;
+    const archived = card.lifecycle === 'archived';
     wx.showModal({
-      title: archived ? '永久删除归档名片' : '删除这张名片',
+      title: archived ? '删除归档名片' : '删除这张名片',
       content: archived
-        ? '删除后不能恢复，原分享链接仍会保持失效。'
-        : '删除后不能恢复。删除最后一张后，账号将暂时没有可用名片。',
+        ? '删除后原分享链接保持失效，后台保留历史记录。'
+        : '删除后原分享链接将失效，后台保留历史记录。删除最后一张后将没有可用名片。',
       confirmText: '删除',
       confirmColor: '#c82423',
       success: (res) => {
@@ -127,19 +133,19 @@ Page({
   },
   onCreate() {
     if (!this.data.draftTemplate || !this.data.draftCompanyId) {
-      this.setData({ error: '请先完成企业认证，等待企业获得名片模板' });
+      this.setData({ error: '暂无可用模板，请联系管理员分配名片权限或模板' });
       return;
     }
+    if (this.data.mode === 'style' && !this.data.canEdit) return;
     this.setData({ creating: true, error: '' });
     request({
-      url: '/api/employee/cards',
-      method: 'POST',
-      data: { template: this.data.draftTemplate, companyId: this.data.draftCompanyId },
+      url: this.data.mode === 'style' ? '/api/employee/me' : '/api/employee/cards',
+      method: this.data.mode === 'style' ? 'PUT' : 'POST',
+      data: this.data.mode === 'style'
+        ? { cardTemplate: this.data.draftTemplate, companyId: this.data.draftCompanyId }
+        : { template: this.data.draftTemplate, companyId: this.data.draftCompanyId },
     }).then(() => {
       wx.redirectTo({ url: '/pages/home/edit' });
     }).catch((err) => this.setData({ creating: false, error: err.message }));
-  },
-  onCert() {
-    wx.navigateTo({ url: '/pages/mine/cert' });
   },
 });

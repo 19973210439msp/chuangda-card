@@ -20,8 +20,8 @@ test('card management renders every employee card as its own row', () => {
     state.employees = [{
       id: 'person-1', status: 'active', activeCardId: 'card-1',
       cards: [
-        { id: 'card-1', name: '第一张名片', company: '总公司', phone: '13800000001', templateLabel: '创大产控模板', isDefault: true },
-        { id: 'card-2', name: '第二张名片', company: '子公司', phone: '13800000002', templateLabel: '子公司模板', isDefault: false },
+        { id: 'card-1', name: '第一张名片', company: '总公司', phone: '13800000001', templateLabel: '创大产控模板', lifecycle: 'active', isDefault: true },
+        { id: 'card-2', name: '第二张名片', company: '子公司', phone: '13800000002', templateLabel: '子公司模板', lifecycle: 'active', isDefault: false },
       ],
     }];
     cardsHtml();
@@ -31,7 +31,35 @@ test('card management renders every employee card as its own row', () => {
   assert.match(html, /data-action="edit-card" data-id="person-1" data-card="card-1"/);
   assert.match(html, /data-action="edit-card" data-id="person-1" data-card="card-2"/);
   const dashboard = vm.runInContext('dashboardHtml()', context);
-  assert.match(dashboard, /<span>员工名片<\/span><b>2<\/b>/);
+  assert.match(dashboard, /<span>有效名片<\/span><b>2<\/b>/);
+});
+
+test('admin card management shows account-only users and separates account phone from card phone', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../admin-web/js/app.js'), 'utf8');
+  const page = { innerHTML: '', querySelector: () => null };
+  const context = vm.createContext({
+    document: { querySelector: (selector) => selector === '#app' ? page : null, addEventListener: () => {} },
+    window: { addEventListener: () => {} }, location: { hash: '#/cards' }, token: () => '',
+  });
+  vm.runInContext(source, context);
+  const html = vm.runInContext(`
+    state.admin = { scope: 'hq' };
+    state.templates = [{ id: 'classic', name: '创大产控模板' }];
+    state.companies = [{ id: 'default', name: '总公司' }];
+    state.employees = [{ id: 'account-only', status: 'active', accountPhone: '13950600003', cards: [] }];
+    cardsHtml();
+  `, context);
+  assert.match(html, /13950600003/);
+  assert.match(html, /尚未创建名片/);
+
+  const createDialog = vm.runInContext("employeeDialog({ id: '', accountPhone: '', phone: '' })", context);
+  assert.match(createDialog, /name="accountPhone"/);
+  assert.match(createDialog, /账号手机号/);
+  assert.match(createDialog, /名片联系电话/);
+
+  const editDialog = vm.runInContext("employeeDialog({ id: 'account-only', accountPhone: '13950600003', phone: '13850600003', cards: [] })", context);
+  assert.match(editDialog, /账号手机号：13950600003/);
+  assert.doesNotMatch(editDialog, /name="accountPhone"/);
 });
 
 test('success notice expires and clears when switching pages', async () => {
@@ -89,6 +117,8 @@ test('hq employee creation and import include a target company selector', () => 
   const imported = vm.runInContext('importHtml()', context);
   assert.match(imported, /名片归属企业/);
   assert.doesNotThrow(() => vm.runInContext("assertTemplateAssignment('classic', 'company-a')", context));
+  assert.doesNotThrow(() => vm.runInContext("assertTemplateAssignment('classic', 'company-b')", context));
+  vm.runInContext("state.admin = { scope: 'company', companyId: 'company-a' };", context);
   assert.throws(() => vm.runInContext("assertTemplateAssignment('classic', 'company-b')", context), /未分配给目标企业/);
 });
 
@@ -114,11 +144,21 @@ test('employee removal copy distinguishes permanent deletion from company author
   assert.match(company.success, /已移除本公司授权/);
 });
 
-test('certification interfaces do not expose certification codes', () => {
+test('certification entry is removed and default policy form only appears for enabled HQ', () => {
   const source = fs.readFileSync(path.join(__dirname, '../../admin-web/js/app.js'), 'utf8');
-  const certScript = fs.readFileSync(path.join(__dirname, '../../miniprogram/pages/mine/cert.js'), 'utf8');
-  const certMarkup = fs.readFileSync(path.join(__dirname, '../../miniprogram/pages/mine/cert.wxml'), 'utf8');
-  assert.doesNotMatch(source, /certCode|认证码/);
-  assert.doesNotMatch(certScript, /certCode|onCertCode|认证码/);
-  assert.doesNotMatch(certMarkup, /certCode|onCertCode|认证码/);
+  const appConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '../../miniprogram/app.json'), 'utf8'));
+  assert.equal(appConfig.pages.includes('pages/mine/cert'), false);
+  assert.doesNotMatch(source, /certCode|认证码|api\/certifications/);
+  const context = vm.createContext({
+    document: { querySelector: (selector) => selector === '#app' ? { innerHTML: '', querySelector: () => null } : null, addEventListener: () => {} },
+    window: { addEventListener: () => {} }, location: { hash: '' }, token: () => '',
+  });
+  vm.runInContext(source, context);
+  vm.runInContext("state.admin = { scope: 'hq' }; state.permissionPolicy = { enabled: false, companies: [] };", context);
+  assert.doesNotMatch(vm.runInContext('certHtml()', context), /data-form="permission-policy"/);
+  vm.runInContext("state.permissionPolicy.enabled = true; state.permissionPolicy.policy = { level: 1, companyIds: [] };", context);
+  assert.match(vm.runInContext('certHtml()', context), /data-form="permission-policy"/);
+  vm.runInContext("state.admin = { scope: 'company', companyId: 'a' };", context);
+  const sub = vm.runInContext('certHtml()', context);
+  assert.doesNotMatch(sub, /data-form="permission-policy"|value="3"/);
 });
