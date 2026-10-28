@@ -88,11 +88,11 @@ function companyForTemplate(company, root, templateId) {
   const hq = root || {};
   return {
     ...company,
-    name: (template && template.companyName) || company.name,
-    nameEn: (template && template.companyNameEn) || company.nameEn,
-    shortName: (template && template.shortName) || company.shortName,
-    brandEn: (template && template.shortNameEn) || company.brandEn,
-    qrUrl: (template && template.qrUrl) || company.qrUrl || '/official-qr.jpg',
+    name: firstFilled([template && template.companyName, hq.name, company.name]),
+    nameEn: firstFilled([template && template.companyNameEn, hq.nameEn, company.nameEn]),
+    shortName: firstFilled([template && template.shortName, hq.shortName, company.shortName]),
+    brandEn: firstFilled([template && template.shortNameEn, hq.brandEn, company.brandEn]),
+    qrUrl: (template && template.qrUrl) || hq.qrUrl || '/official-qr.jpg',
     phone: firstFilled([company.phone, hq.phone]),
     address: firstFilled([company.address, hq.address]),
   };

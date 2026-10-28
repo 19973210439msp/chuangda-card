@@ -36,7 +36,7 @@
         </picker>
       </view>
       <text class="label">选择名片样式</text>
-      <text class="desc">先选归属公司，再选这家公司获配的模板。电话和地址使用所选公司的资料，留空时显示总部资料。更换样式会更新当前名片，创建名片会新增一张。</text>
+      <text class="desc">先选归属公司，再选这家公司获配的模板。公司名称、简称和二维码由模板固定；电话和地址使用所选公司的资料，留空时显示总部资料。更换样式会更新当前名片，创建名片会新增一张。</text>
       <view class="style-item {{draftTemplate === item.id && draftCompanyId === item.companyId ? 'on' : ''}}" wx:for="{{templates}}" wx:key="key" data-template="{{item.id}}" data-company="{{item.companyId}}" bindtap="onTemplate">
         <view class="card-head">
           <text class="tpl">{{item.label}}</text>

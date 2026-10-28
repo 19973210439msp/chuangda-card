@@ -37,6 +37,12 @@ function loadPage(file, request = async () => ({})) {
   return { page, navigation };
 }
 
+test('card layouts prefer the template brand over the editable card company field', () => {
+  const markup = fs.readFileSync(path.join(__dirname, '../components/card-view/index.wxml'), 'utf8');
+  assert.match(markup, /\{\{company\.name \|\| card\.company\}\}/);
+  assert.doesNotMatch(markup, /\{\{card\.company \|\| company\.name\}\}/);
+});
+
 function readyPage(request) {
   const harness = loadPage('switch.js', request);
   Object.assign(harness.page.data, {
@@ -120,7 +126,7 @@ function groupedTemplates() {
     id, name: id,
     companyOptions: [
       { companyId: 'default', companyName: '总部', company: { name: id === 'tpl-custom' ? '定制品牌' : '总部' } },
-      { companyId: 'company-1', companyName: '子公司', company: { name: id === 'tpl-custom' ? '定制品牌' : '子公司' } },
+      { companyId: 'company-1', companyName: '子公司', company: { name: id === 'tpl-custom' ? '定制品牌' : '总部' } },
     ],
   }));
 }
@@ -139,7 +145,7 @@ test('level-three style page shows every layout for the selected company', async
   assert.equal(page.data.templateCompanies.length, 2);
   assert.equal(page.data.chooseCompany, true);
   assert.equal(page.data.draftCompanyId, 'company-1');
-  assert.equal(page.data.templates.find((item) => item.id === 'classic').preview.company, '子公司');
+  assert.equal(page.data.templates.find((item) => item.id === 'classic').preview.company, '总部');
   page.onTemplateCompanyChange({ detail: { value: '0' } });
   assert.deepEqual(page.data.templates.map((item) => item.id), ['classic', 'horizon', 'wave', 'tpl-custom']);
   assert.equal(page.data.draftTemplate, 'wave');

@@ -4,22 +4,34 @@ const { companyForTemplate, createTemplate } = require('../lib/templates');
 
 const hq = {
   name: '上海创大产控高新技术集团有限公司',
+  nameEn: 'SHANGHAI CHUANGDA CHANKONG HI-TECH GROUP CO., LTD.',
+  shortName: '创大产控',
+  brandEn: 'CHUANGDACHANKONG',
+  qrUrl: '/official-qr.jpg',
   phone: '021-5888 6080',
   address: '上海市浦东新区金桥红枫路288号',
   cardTemplates: [],
 };
 
-test('built-in templates keep a subsidiary phone and otherwise use the headquarters contact', () => {
+test('built-in templates keep headquarters branding while using the selected company contact', () => {
   const withContact = companyForTemplate(
-    { name: '子公司', phone: '021-1111 2222', address: '子公司地址' },
+    {
+      name: '子公司', shortName: '子公司简称', qrUrl: '/uploads/subsidiary-qr.png',
+      phone: '021-1111 2222', address: '子公司地址',
+    },
     hq,
     'classic',
   );
+  assert.equal(withContact.name, hq.name);
+  assert.equal(withContact.nameEn, hq.nameEn);
+  assert.equal(withContact.shortName, hq.shortName);
+  assert.equal(withContact.brandEn, hq.brandEn);
+  assert.equal(withContact.qrUrl, hq.qrUrl);
   assert.equal(withContact.phone, '021-1111 2222');
   assert.equal(withContact.address, '子公司地址');
 
   const blank = companyForTemplate({ name: '子公司', phone: '', address: '' }, hq, 'classic');
-  assert.equal(blank.name, '子公司');
+  assert.equal(blank.name, hq.name);
   assert.equal(blank.phone, '021-5888 6080');
   assert.equal(blank.address, '上海市浦东新区金桥红枫路288号');
 });

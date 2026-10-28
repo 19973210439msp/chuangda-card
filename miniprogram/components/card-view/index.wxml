@@ -11,7 +11,7 @@
     <text class="hz-title">{{card.title}}</text>
   </view>
   <view class="hz-main">
-    <text class="hz-company">{{card.company || company.name}}</text>
+    <text class="hz-company">{{company.name || card.company}}</text>
     <text class="hz-line">手机 {{card.phone}}</text>
     <text class="hz-line">邮箱 {{card.email}}</text>
     <text class="hz-line">地址 {{card.address || company.address}}</text>
