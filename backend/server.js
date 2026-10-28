@@ -1152,7 +1152,7 @@ app.get('/api/employee/templates', asyncRoute(async (req, res) => {
     const preferred = companyOptions.find((option) => option.companyId === 'default' && (template.companyIds || []).includes('default'))
       || companyOptions.find((option) => (template.companyIds || []).includes(option.companyId))
       || companyOptions[0];
-    if (preferred) items.push({ id: template.id, name: template.name, ...preferred, companyOptions });
+    if (preferred) items.push({ id: template.id, name: template.name, builtIn: !!template.builtIn, ...preferred, companyOptions });
   }
   res.json({ items, permission });
 }));

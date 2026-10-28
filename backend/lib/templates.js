@@ -83,25 +83,14 @@ function firstFilled(values) {
 }
 
 function companyForTemplate(company, root, templateId) {
+  if (!company) return company;
   const template = listTemplates(root).find((item) => item.id === templateId);
-  const base = company || {};
   const hq = root || {};
-  const contact = {
-    phone: firstFilled([base.phone, hq.phone]),
-    address: firstFilled([base.address, hq.address]),
-  };
-  if (!template) {
-    if (!company) return company;
-    return { ...base, ...contact };
-  }
   return {
-    ...base,
-    name: template.companyName,
-    nameEn: template.companyNameEn,
-    shortName: template.shortName,
-    brandEn: template.shortNameEn,
-    qrUrl: template.qrUrl || base.qrUrl || '/official-qr.jpg',
-    ...contact,
+    ...company,
+    qrUrl: company.qrUrl || (template && template.qrUrl) || '/official-qr.jpg',
+    phone: firstFilled([company.phone, hq.phone]),
+    address: firstFilled([company.address, hq.address]),
   };
 }
 

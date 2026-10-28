@@ -125,7 +125,7 @@ function groupedTemplates() {
   }));
 }
 
-test('level-three style page shows four templates per company and preserves the template when company changes', async () => {
+test('level-three style page shows the built-in layouts for the selected company', async () => {
   const calls = [];
   const { page } = loadPage('switch.js', async (options) => {
     if (options.method === 'POST') { calls.push(options); return {}; }
@@ -135,16 +135,17 @@ test('level-three style page shows four templates per company and preserves the 
   });
   page.load();
   await new Promise(setImmediate);
-  assert.equal(page.data.templates.length, 4);
-  assert.equal(new Set(page.data.templates.map((item) => item.id)).size, 4);
+  assert.deepEqual(page.data.templates.map((item) => item.id), ['classic', 'horizon', 'wave']);
   assert.equal(page.data.templateCompanies.length, 2);
+  assert.equal(page.data.chooseCompany, true);
   assert.equal(page.data.draftCompanyId, 'company-1');
+  assert.equal(page.data.templates.find((item) => item.id === 'classic').preview.company, '子公司');
   page.onTemplateCompanyChange({ detail: { value: '0' } });
-  assert.equal(page.data.templates.length, 4);
+  assert.deepEqual(page.data.templates.map((item) => item.id), ['classic', 'horizon', 'wave']);
   assert.equal(page.data.draftTemplate, 'wave');
   assert.equal(page.data.draftCompanyId, 'default');
   assert.ok(page.data.templates.every((item) => item.companyId === 'default'));
-  assert.equal(page.data.templates.find((item) => item.id === 'tpl-custom').preview.company, '定制品牌');
+  assert.equal(page.data.templates.find((item) => item.id === 'classic').preview.company, '总部');
   page.onCreate();
   assert.equal(calls[0].data.companyId, 'default');
 });
@@ -166,7 +167,7 @@ test('level-three card editor retains every allowed company after templates are 
   assert.equal(calls[0].data.companyId, 'default');
 });
 
-test('level-two style page merges shared templates without hiding company-exclusive templates', async () => {
+test('level-two style page chooses a company before listing that company layouts', async () => {
   const { page } = loadPage('switch.js', async ({ url }) => url === '/api/employee/me'
     ? { employee: { activeCardId: '', cards: [] }, canEdit: false }
     : {
@@ -182,11 +183,16 @@ test('level-two style page merges shared templates without hiding company-exclus
     });
   page.load();
   await new Promise(setImmediate);
-  assert.deepEqual(Array.from(page.data.templates, (item) => item.id), ['classic', 'horizon', 'wave']);
+  assert.deepEqual(Array.from(page.data.templates, (item) => item.id), ['classic', 'horizon']);
   assert.equal(page.data.draftTemplate, 'classic');
+  assert.equal(page.data.chooseCompany, true);
   assert.deepEqual(Array.from(page.data.templateCompanies, (item) => item.id), ['company-a', 'company-b']);
   page.onTemplate({ currentTarget: { dataset: { template: 'horizon', company: 'company-a' } } });
-  assert.deepEqual(Array.from(page.data.templates, (item) => item.id), ['classic', 'horizon', 'wave']);
-  assert.equal(page.data.chooseCompany, false);
+  assert.deepEqual(Array.from(page.data.templates, (item) => item.id), ['classic', 'horizon']);
+  assert.equal(page.data.chooseCompany, true);
   assert.equal(page.data.draftCompanyId, 'company-a');
+  page.onTemplateCompanyChange({ detail: { value: '1' } });
+  assert.equal(page.data.draftCompanyId, 'company-b');
+  assert.deepEqual(Array.from(page.data.templates, (item) => item.id), ['classic', 'wave']);
+  assert.equal(page.data.draftTemplate, 'classic');
 });

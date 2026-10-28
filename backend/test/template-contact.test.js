@@ -24,8 +24,14 @@ test('built-in templates keep a subsidiary phone and otherwise use the headquart
   assert.equal(blank.address, '上海市浦东新区金桥红枫路288号');
 });
 
-test('the selected company supplies the phone and address even when the template prints another name', () => {
-  const selected = { id: 'co-sz', name: '武创人工智能科技研究院(苏州)有限公司', phone: '0512-6666 8888', address: '苏州工业园区' };
+test('the selected company supplies the name, phone, and address', () => {
+  const selected = {
+    id: 'co-sz',
+    name: '武创人工智能科技研究院(苏州)有限公司',
+    shortName: '武创大智',
+    phone: '0512-6666 8888',
+    address: '苏州工业园区',
+  };
   const root = {
     ...hq,
     id: 'default',
@@ -35,15 +41,21 @@ test('the selected company supplies the phone and address even when the template
       companyNameEn: 'CUSTOM',
       shortName: '武创',
       shortNameEn: 'CUSTOM',
-      qrUrl: '',
+      qrUrl: '/uploads/template-qr.png',
     }],
   };
   const branded = companyForTemplate(selected, root, 'tpl-1');
-  assert.equal(branded.name, '模板上的另一家公司');
+  assert.equal(branded.name, selected.name);
+  assert.equal(branded.shortName, '武创大智');
   assert.equal(branded.phone, selected.phone);
   assert.equal(branded.address, selected.address);
+  assert.equal(branded.qrUrl, '/uploads/template-qr.png');
+
+  const ownQr = companyForTemplate({ ...selected, qrUrl: '/uploads/company-qr.png' }, root, 'tpl-1');
+  assert.equal(ownQr.qrUrl, '/uploads/company-qr.png');
 
   const blank = companyForTemplate({ ...selected, phone: '', address: '' }, root, 'tpl-1');
+  assert.equal(blank.name, selected.name);
   assert.equal(blank.phone, hq.phone);
   assert.equal(blank.address, hq.address);
 });

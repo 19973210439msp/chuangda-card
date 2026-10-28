@@ -1193,7 +1193,8 @@ test('hq creates a named classic template and assigns it to one subsidiary', asy
   assert.equal(employee.status, 201);
   assert.equal(employee.json.employee.cards[0].templateLabel, '苏州子公司模板');
   const publicCard = await api('/api/cards/' + employee.json.employee.id);
-  assert.equal(publicCard.json.company.name, '苏州创新科技有限公司');
+  assert.equal(publicCard.json.company.name, '模板授权公司');
+  assert.equal(publicCard.json.company.shortName, '模板公司');
   assert.equal(publicCard.json.company.qrUrl, '/uploads/test-qr.png');
   assert.equal(publicCard.json.company.phone, '021-5888 6080');
   assert.equal(publicCard.json.company.address, '上海市浦东新区金桥红枫路288号');
@@ -1210,7 +1211,8 @@ test('hq creates a named classic template and assigns it to one subsidiary', asy
   assert.equal((await api('/api/templates', { token: admin1.json.token })).json.items.some((item) => item.id === templateId), false);
   assert.equal((await api('/api/templates', { token: admin2.json.token })).json.items.some((item) => item.id === templateId), true);
   const updatedCard = await api('/api/cards/' + employee.json.employee.id);
-  assert.equal(updatedCard.json.company.name, '新公司名称');
+  assert.equal(updatedCard.json.company.name, '模板授权公司');
+  assert.equal(updatedCard.json.company.shortName, '模板公司');
   assert.equal(updatedCard.json.company.qrUrl, '/uploads/new-qr.png');
 });
 

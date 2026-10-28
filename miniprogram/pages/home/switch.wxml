@@ -36,10 +36,10 @@
         </picker>
       </view>
       <text class="label">选择名片样式</text>
-      <text class="desc">上面选的归属公司决定这张名片记在哪家，电话和地址也用这家的。这家没填时，先显示总部的。更换样式会更新当前名片，创建名片会新增一张。</text>
+      <text class="desc">先选归属公司，再选这家能用的版式。公司名、电话和地址都用这家的。电话或地址没填时，先显示总部的。更换样式会更新当前名片，创建名片会新增一张。</text>
       <view class="style-item {{draftTemplate === item.id && draftCompanyId === item.companyId ? 'on' : ''}}" wx:for="{{templates}}" wx:key="key" data-template="{{item.id}}" data-company="{{item.companyId}}" bindtap="onTemplate">
         <view class="card-head">
-          <view><text class="tpl">{{item.label}}</text><text class="template-company" wx:if="{{item.companyId}}">{{item.companyName}}</text></view>
+          <text class="tpl">{{item.label}}</text>
           <text class="current" wx:if="{{draftTemplate === item.id && draftCompanyId === item.companyId}}">已选</text>
         </view>
         <card-view card="{{item.preview}}" company="{{item.brand}}"></card-view>

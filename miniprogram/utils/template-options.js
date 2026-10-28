@@ -1,8 +1,14 @@
-// Templates are listed once; company choices remain explicit.
+const BUILT_IN_TEMPLATE_IDS = new Set(['classic', 'horizon', 'wave']);
+
+// One row per company grant. The style list is chosen after the company.
 function expandTemplateOptions(items) {
   return (items || []).flatMap((item) => Array.isArray(item.companyOptions)
     ? item.companyOptions.map((option) => ({ ...item, ...option }))
     : [item]);
+}
+
+function isBuiltInTemplate(item) {
+  return !!(item && (item.builtIn || BUILT_IN_TEMPLATE_IDS.has(item.id)));
 }
 
 function templateCompanies(items) {
@@ -12,24 +18,29 @@ function templateCompanies(items) {
       companies.set(item.companyId, { id: item.companyId, name: item.companyName || '' });
     }
   }
-  return [...companies.values()];
+  return [...companies.values()].sort((a, b) => Number(b.id === 'default') - Number(a.id === 'default'));
 }
 
 function templateSelection(options, templateId, companyId) {
-  const groups = new Map();
-  for (const item of options || []) {
-    if (!groups.has(item.id)) groups.set(item.id, []);
-    groups.get(item.id).push(item);
+  const rows = options || [];
+  const companies = templateCompanies(rows);
+  const selectedCompany = companies.find((item) => item.id === companyId)
+    || companies.find((item) => item.id === 'default')
+    || companies[0];
+  const templates = [];
+  const seen = new Set();
+  for (const item of rows) {
+    if (!selectedCompany || item.companyId !== selectedCompany.id || !isBuiltInTemplate(item) || seen.has(item.id)) continue;
+    seen.add(item.id);
+    templates.push(item);
   }
-  const selectedOptions = groups.get(templateId) || groups.values().next().value || [];
-  const selected = selectedOptions.find((item) => item.companyId === companyId) || selectedOptions[0];
-  const companies = templateCompanies(selectedOptions);
+  const selected = templates.find((item) => item.id === templateId) || templates[0];
   return {
-    templates: [...groups.values()].map((items) => items.find((item) => selected && item.companyId === selected.companyId) || items[0]),
+    templates,
     draftTemplate: selected ? selected.id : '',
-    draftCompanyId: selected ? selected.companyId : '',
+    draftCompanyId: selectedCompany ? selectedCompany.id : '',
     templateCompanies: companies,
-    templateCompanyIndex: Math.max(0, companies.findIndex((item) => selected && item.id === selected.companyId)),
+    templateCompanyIndex: Math.max(0, companies.findIndex((item) => selectedCompany && item.id === selectedCompany.id)),
     chooseCompany: companies.length > 1,
   };
 }
