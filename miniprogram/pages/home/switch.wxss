@@ -61,6 +61,27 @@
   margin-top: 24rpx;
 }
 
+.company-selector {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16rpx;
+  min-height: 88rpx;
+  padding: 16rpx 20rpx;
+  margin-bottom: 24rpx;
+  box-sizing: border-box;
+  border: 1rpx solid #e6e8ee;
+  border-radius: 8rpx;
+  color: #182850;
+  font-size: 26rpx;
+}
+
+.company-selector text {
+  flex-shrink: 0;
+  color: #5b6778;
+  font-size: 24rpx;
+}
+
 .tpl,
 .meta {
   color: #5b6778;

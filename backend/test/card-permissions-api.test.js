@@ -438,3 +438,55 @@ test('hq employee merge transfers cards and effective card permissions to the ke
   assert.equal(retired.cardPermission, undefined);
   assert.equal(retired.companyCardPermissions, undefined);
 });
+
+test('level-three templates match HQ catalog once each and keep company choices separate', async () => {
+  const hq = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
+  const hqToken = hq.json.token;
+  const company = await api('/api/companies', { method: 'POST', token: hqToken, body: { name: '模板去重企业' } });
+  const companyId = company.json.id;
+  const createdTemplate = await api('/api/templates', {
+    method: 'POST', token: hqToken,
+    body: { name: '去重定制模板', companyName: '定制品牌', companyIds: [companyId] },
+  });
+  assert.equal(createdTemplate.status, 201);
+  const templateId = createdTemplate.json.template.id;
+  const user = await api('/api/auth/wechat', {
+    method: 'POST', body: { code: 'dev:unique-level3', phoneCode: 'dev:13950700001' },
+  });
+  const userId = user.json.employee.id;
+  const token = user.json.token;
+  await api('/api/account-permissions/' + userId, { method: 'PUT', token: hqToken, body: { level: 3 } });
+  const catalog = await api('/api/templates', { token: hqToken });
+  const available = await api('/api/employee/templates', { token });
+  assert.equal(available.status, 200);
+  assert.deepEqual(available.json.items.map((item) => item.id).sort(), catalog.json.items.map((item) => item.id).sort());
+  assert.equal(new Set(available.json.items.map((item) => item.id)).size, available.json.items.length);
+  const companies = await api('/api/companies', { token: hqToken });
+  for (const item of available.json.items) {
+    assert.deepEqual(item.companyOptions.map((option) => option.companyId).sort(), companies.json.items.map((entry) => entry.id).sort());
+    assert.equal(item.companyOptions.some((option) => option.companyId === 'wechat-review-demo'), false);
+  }
+  const custom = available.json.items.find((item) => item.id === templateId);
+  assert.equal(custom.companyId, companyId);
+  assert.ok(custom.companyOptions.every((option) => option.company.name === '定制品牌'));
+
+  const newCard = await api('/api/employee/cards', {
+    method: 'POST', token, body: { template: templateId, companyId: 'default' },
+  });
+  assert.equal(newCard.status, 201);
+  assert.equal((await api('/api/employee/me', {
+    method: 'PUT', token, body: { companyId, title: '产品经理' },
+  })).status, 200);
+
+  await api('/api/account-permissions/' + userId, {
+    method: 'PUT', token: hqToken, body: { level: 2, companyIds: [companyId] },
+  });
+  const companyTemplates = await api('/api/employee/templates', { token });
+  assert.ok(companyTemplates.json.items.some((item) => item.id === templateId));
+  assert.ok(companyTemplates.json.items.every((item) => item.companyId === companyId));
+  assert.equal((await api('/api/employee/cards', {
+    method: 'POST', token, body: { template: templateId, companyId: 'default' },
+  })).status, 403);
+  await api('/api/account-permissions/' + userId, { method: 'PUT', token: hqToken, body: { level: 1 } });
+  assert.deepEqual((await api('/api/employee/templates', { token })).json.items, []);
+});

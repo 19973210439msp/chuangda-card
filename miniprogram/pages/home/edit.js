@@ -1,6 +1,7 @@
 const { request, uploadFile } = require('../../utils/request');
 const { ensureLogin } = require('../../utils/guard');
 const { pageScrollHeight } = require('../../utils/util');
+const { expandTemplateOptions } = require('../../utils/template-options');
 
 Page({
   data: {
@@ -32,7 +33,7 @@ Page({
       return Promise.all([Promise.resolve(form), request({ url: '/api/employee/templates' })]);
     }).then(([form, available]) => {
       const choices = [];
-      (available.items || []).filter((item) => item.id === form.cardTemplate).forEach((item) => {
+      expandTemplateOptions(available.items).filter((item) => item.id === form.cardTemplate).forEach((item) => {
         if (!choices.some((company) => company.id === item.companyId)) choices.push({ id: item.companyId, name: item.companyName });
       });
       if (form.companyId && !choices.some((item) => item.id === form.companyId)) {

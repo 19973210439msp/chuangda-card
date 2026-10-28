@@ -29,6 +29,12 @@
       </view>
     </block>
     <view class="create" wx:else>
+      <view wx:if="{{chooseCompany && templateCompanies.length}}">
+        <text class="label">名片归属公司</text>
+        <picker mode="selector" range="{{templateCompanies}}" range-key="name" value="{{templateCompanyIndex}}" bindchange="onTemplateCompanyChange" disabled="{{creating}}">
+          <view class="company-selector">{{templateCompanies[templateCompanyIndex].name}}<text>选择 ›</text></view>
+        </picker>
+      </view>
       <text class="label">选择名片样式</text>
       <text class="desc">这里显示当前权限允许使用的企业模板。更换样式会更新当前名片，创建名片会新增一张。</text>
       <view class="style-item {{draftTemplate === item.id && draftCompanyId === item.companyId ? 'on' : ''}}" wx:for="{{templates}}" wx:key="key" data-template="{{item.id}}" data-company="{{item.companyId}}" bindtap="onTemplate">

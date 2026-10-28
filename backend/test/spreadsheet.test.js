@@ -30,6 +30,13 @@ test('csv import supports quoted commas', async () => {
   assert.equal(rows[0].phone, '19116390887');
 });
 
+test('imports accept occupation and both legacy title headers', async () => {
+  for (const header of ['职业', '职位', '职务']) {
+    const rows = await rowsFromSpreadsheet(Buffer.from(`姓名,${header},手机号\n测试员工,产品经理,13800000000\n`), '.csv');
+    assert.equal(rows[0].title, '产品经理');
+  }
+});
+
 test('docx import reads the first table and Chinese headers', async () => {
   const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">

@@ -263,7 +263,7 @@ function cardsHtml() {
     <tr>
       <td data-label="姓名" title="${esc(nameText)}"><span class="cell-clip">${esc(nameText)}${card.isDefault ? '<span class="tag default-card">默认</span>' : ''}${accountPhone ? `<small>账号 ${esc(accountPhone)}</small>` : ''}</span></td>
       <td data-label="公司" title="${esc(companyText)}"><span class="cell-clip">${esc(companyText)}</span></td>
-      <td data-label="职位" title="${esc(card.title || '')}"><span class="cell-clip">${esc(card.title || '')}</span></td>
+      <td data-label="职业" title="${esc(card.title || '')}"><span class="cell-clip">${esc(card.title || '')}</span></td>
       <td data-label="名片电话" title="${esc(card.phone || '')}"><span class="cell-clip">${esc(card.phone || '')}</span></td>
       <td data-label="邮箱" title="${esc(card.email || item.email || '')}"><span class="cell-clip">${esc(card.email || item.email || '')}</span></td>
       <td data-label="所用模板" title="${esc(currentTemplate)}"><span class="cell-clip">${esc(currentTemplate)}</span></td>
@@ -309,7 +309,7 @@ function cardsHtml() {
         <colgroup>
           <col class="col-name"><col class="col-company"><col class="col-title"><col class="col-phone"><col class="col-email"><col class="col-template"><col class="col-status"><col class="col-ops">
         </colgroup>
-        <thead><tr><th>姓名 / 账号</th><th>公司</th><th>职位</th><th>名片电话</th><th>邮箱</th><th>所用模板</th><th>状态</th><th>操作</th></tr></thead>
+        <thead><tr><th>姓名 / 账号</th><th>公司</th><th>职业</th><th>名片电话</th><th>邮箱</th><th>所用模板</th><th>状态</th><th>操作</th></tr></thead>
         <tbody>${rows || '<tr><td colspan="8">没有匹配的名片</td></tr>'}</tbody>
       </table>
     </div>
@@ -317,7 +317,7 @@ function cardsHtml() {
       <h3>已注销账号</h3>
       <p class="lede">员工注销后不能再用同一微信新建账号。数据仍保留在这里，点「恢复账号」后即可重新登录，对外名片重新可见。</p>
       <table>
-        <thead><tr><th>姓名</th><th>职位</th><th>手机号</th><th>邮箱</th><th>公司</th><th>地址</th><th>操作</th></tr></thead>
+        <thead><tr><th>姓名</th><th>职业</th><th>手机号</th><th>邮箱</th><th>公司</th><th>地址</th><th>操作</th></tr></thead>
         <tbody>${closedRows || '<tr><td colspan="7">目前没有已注销账号</td></tr>'}</tbody>
       </table>
     </div>
@@ -328,11 +328,11 @@ function importHtml() {
   return shell('批量导入', `
     <form class="panel" data-form="batch">
       <h3>批量导入</h3>
-      <p class="lede">可粘贴表格，或选择 xlsx、xlsm、csv、tsv、docx 文件。旧版 xls 请先另存为 xlsx。Word 请把内容放在表格里，第一行写表头。表头为：姓名、职位、手机号、邮箱、公司、地址。手机号必填。这一批名片使用选中的模板。同一公司、同一模板、同一手机号会更新原名片；换一个模板会另外新建一张。</p>
+      <p class="lede">可粘贴表格，或选择 xlsx、xlsm、csv、tsv、docx 文件。旧版 xls 请先另存为 xlsx。Word 请把内容放在表格里，第一行写表头。表头为：姓名、职业、手机号、邮箱、公司、地址。手机号必填。这一批名片使用选中的模板。同一公司、同一模板、同一手机号会更新原名片；换一个模板会另外新建一张。</p>
       ${targetCompanyField('companyId', 'default')}
       ${templateChooser('cardTemplate', '')}
       <label for="batch">导入内容</label>
-      <textarea id="batch" name="list" placeholder="姓名,职位,手机号,邮箱,二维码,公司,地址"></textarea>
+      <textarea id="batch" name="list" placeholder="姓名,职业,手机号,邮箱,二维码,公司,地址"></textarea>
       <div class="file-pick">
         <input id="batch-file" class="file-pick-input" type="file" accept=".xlsx,.xlsm,.csv,.txt,.tsv,.docx">
         <label class="btn secondary" for="batch-file">选择文件</label>
@@ -444,8 +444,7 @@ function employeeDialog(item) {
         ${item.id ? picker : targetCompanyField('companyId', item.companyId || 'default') + templateChooser('cardTemplate', item.cardTemplate)}
         <div class="grid-2">
           <div>${field('name', '姓名', item.name)}</div>
-          ${state.admin && state.admin.scope === 'company' ? '' : `<div>${field('department', '部门', item.department)}</div>`}
-          <div>${field('title', '职务', item.title)}</div>
+          <div>${field('title', '职业', item.title)}</div>
           <div>${field('phone', '名片联系电话', item.phone, 'tel', !item.id)}</div>
           <div>${field('email', '邮箱', item.email, 'email')}</div>
           <div>${field('company', '公司', item.company)}</div>
@@ -720,7 +719,7 @@ function parseImportTable(raw) {
   if (text.startsWith('[')) return JSON.parse(text);
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   const alias = {
-    姓名: 'name', 职位: 'title', 职务: 'title', 手机号: 'phone', 手机: 'phone',
+    姓名: 'name', 职业: 'title', 职位: 'title', 职务: 'title', 手机号: 'phone', 手机: 'phone',
     邮箱: 'email', 二维码: 'qr', 公司: 'company', 地址: 'address',
     name: 'name', title: 'title', phone: 'phone', email: 'email', qr: 'qr', company: 'company', address: 'address',
   };

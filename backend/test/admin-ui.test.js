@@ -56,10 +56,18 @@ test('admin card management shows account-only users and separates account phone
   assert.match(createDialog, /name="accountPhone"/);
   assert.match(createDialog, /账号手机号/);
   assert.match(createDialog, /名片联系电话/);
+  assert.match(createDialog, /<label for="title">职业<\/label>/);
+  assert.doesNotMatch(createDialog, /name="department"/);
 
   const editDialog = vm.runInContext("employeeDialog({ id: 'account-only', accountPhone: '13950600003', phone: '13850600003', cards: [] })", context);
   assert.match(editDialog, /账号手机号：13950600003/);
   assert.doesNotMatch(editDialog, /name="accountPhone"/);
+  assert.match(editDialog, /<label for="title">职业<\/label>/);
+  assert.doesNotMatch(editDialog, /name="department"/);
+  const imported = vm.runInContext('importHtml()', context);
+  assert.match(imported, /姓名、职业、手机号/);
+  const pasted = vm.runInContext("parseImportTable('姓名,职业,手机号\\n测试员工,产品经理,13800000000')", context);
+  assert.equal(pasted[0].title, '产品经理');
 });
 
 test('success notice expires and clears when switching pages', async () => {

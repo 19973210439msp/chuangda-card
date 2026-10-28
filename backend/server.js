@@ -1107,12 +1107,20 @@ app.get('/api/employee/templates', asyncRoute(async (req, res) => {
     .filter((company) => canManageCompany(permission, company.id));
   const items = [];
   for (const template of allTemplates(root)) {
+    const companyOptions = [];
     for (const company of companies) {
       if (permission.level !== 3 && !templateGrantedTo(root, template.id, company.id)) continue;
-      items.push({
-        id: template.id, name: template.name, companyId: company.id, companyName: company.name,
+      companyOptions.push({
+        companyId: company.id, companyName: company.name,
         company: publicCompany(companyForTemplate(company, root, template.id)),
       });
+    }
+    if (permission.level === 3) {
+      const preferred = companyOptions.find((option) => (template.companyIds || []).includes(option.companyId))
+        || companyOptions[0];
+      if (preferred) items.push({ id: template.id, name: template.name, ...preferred, companyOptions });
+    } else {
+      items.push(...companyOptions.map((option) => ({ id: template.id, name: template.name, ...option })));
     }
   }
   res.json({ items, permission });
