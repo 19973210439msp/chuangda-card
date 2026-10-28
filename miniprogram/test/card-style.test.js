@@ -164,3 +164,28 @@ test('level-three card editor retains every allowed company after templates are 
   page.onSave();
   assert.equal(calls[0].data.companyId, 'default');
 });
+
+test('level-two style page merges shared templates without hiding company-exclusive templates', async () => {
+  const { page } = loadPage('switch.js', async ({ url }) => url === '/api/employee/me'
+    ? { employee: { activeCardId: '', cards: [] }, canEdit: false }
+    : {
+      permission: { level: 2 },
+      items: [
+        { id: 'classic', companyOptions: [
+          { companyId: 'company-a', companyName: '甲公司' },
+          { companyId: 'company-b', companyName: '乙公司' },
+        ] },
+        { id: 'horizon', companyOptions: [{ companyId: 'company-a', companyName: '甲公司' }] },
+        { id: 'wave', companyOptions: [{ companyId: 'company-b', companyName: '乙公司' }] },
+      ],
+    });
+  page.load();
+  await new Promise(setImmediate);
+  assert.deepEqual(Array.from(page.data.templates, (item) => item.id), ['classic', 'horizon', 'wave']);
+  assert.equal(page.data.draftTemplate, 'classic');
+  assert.deepEqual(Array.from(page.data.templateCompanies, (item) => item.id), ['company-a', 'company-b']);
+  page.onTemplate({ currentTarget: { dataset: { template: 'horizon', company: 'company-a' } } });
+  assert.deepEqual(Array.from(page.data.templates, (item) => item.id), ['classic', 'horizon', 'wave']);
+  assert.equal(page.data.chooseCompany, false);
+  assert.equal(page.data.draftCompanyId, 'company-a');
+});

@@ -156,6 +156,11 @@ function renderLogin(message) {
     </main>`;
 }
 
+function sharedReadOnlyAccount(item) {
+  const cards = item.cards || [];
+  return item.canManageAccount === false && cards.some((card) => card.id) && cards.every((card) => card.canAdminEdit === false);
+}
+
 function templateText(item) {
   const cards = item.cards || [];
   if (!cards.length) return item.templateLabel || '创大产控模板';
@@ -167,6 +172,7 @@ function cardFields(item, card) {
   return {
     ...item,
     editingCardId: source.id || '',
+    readOnly: source.canAdminEdit === false,
     name: source.name || '',
     title: source.title || '',
     phone: source.phone || '',
@@ -258,7 +264,7 @@ function cardsHtml() {
       const nameText = card.name || item.name || '未命名';
       const companyText = card.company || item.company || '';
       const currentTemplate = card.id ? (card.templateLabel || templateName(card.template)) : '尚未创建名片';
-      const accountPhone = item.accountPhone || item.authPhone || '';
+      const accountPhone = sharedReadOnlyAccount(item) ? '' : (item.accountPhone || item.authPhone || '');
       return `
     <tr>
       <td data-label="姓名" title="${esc(nameText)}"><span class="cell-clip">${esc(nameText)}${card.isDefault ? '<span class="tag default-card">默认</span>' : ''}${accountPhone ? `<small>账号 ${esc(accountPhone)}</small>` : ''}</span></td>
@@ -270,11 +276,11 @@ function cardsHtml() {
       <td data-label="状态"><span class="tag ${esc(item.status)}">${card.lifecycle === 'deleted' ? '已删除' : card.lifecycle === 'archived' ? '已归档' : statusLabel(item.status)}</span></td>
       <td class="ops" data-label="操作">
         <div class="inline-actions">
-        ${card.id ? (card.lifecycle === 'active' ? `<button class="btn secondary small" type="button" data-action="edit-card" data-id="${esc(item.id)}" data-card="${esc(card.id)}">编辑</button>` : '<span class="muted">历史记录</span>') : `<button class="btn secondary small" type="button" data-action="create-for" data-id="${esc(item.id)}">创建名片</button>`}
-        ${index === 0 ? (item.status === 'closed' || item.status === 'disabled'
+        ${card.id ? (card.lifecycle === 'active' ? `<button class="btn secondary small" type="button" data-action="edit-card" data-id="${esc(item.id)}" data-card="${esc(card.id)}">${card.canAdminEdit === false ? '查看' : '编辑'}</button>${card.canAdminEdit === false ? '<span class="muted">共享只读</span>' : ''}` : '<span class="muted">历史记录</span>') : `<button class="btn secondary small" type="button" data-action="create-for" data-id="${esc(item.id)}">创建名片</button>`}
+        ${index === 0 && item.canManageAccount !== false ? (item.status === 'closed' || item.status === 'disabled'
           ? `<button class="btn small" type="button" data-action="restore" data-id="${esc(item.id)}">恢复账号</button>`
           : `<button class="btn secondary small" type="button" data-action="disable" data-id="${esc(item.id)}">停用账号</button>`) : ''}
-        ${index === 0 ? `<button class="btn danger small" type="button" data-action="remove" data-id="${esc(item.id)}">删除员工</button>` : ''}
+        ${index === 0 && item.canRemoveCompanyCards !== false ? `<button class="btn danger small" type="button" data-action="remove" data-id="${esc(item.id)}">删除员工</button>` : ''}
         </div>
       </td>
     </tr>`;
@@ -289,7 +295,7 @@ function cardsHtml() {
       <td>${esc(item.email)}</td>
       <td>${esc(item.company)}</td>
       <td>${esc(item.address)}</td>
-      <td><button class="btn small" type="button" data-action="restore" data-id="${esc(item.id)}">恢复账号</button></td>
+      <td>${item.canManageAccount === false ? '<span class="muted">只读</span>' : `<button class="btn small" type="button" data-action="restore" data-id="${esc(item.id)}">恢复账号</button>`}</td>
     </tr>`).join('');
   const editing = state.editing;
   const dialog = editing ? employeeDialog(editing) : '';
@@ -304,7 +310,7 @@ function cardsHtml() {
     </div>
     ${noTemplates ? '<p class="banner" role="status">当前企业没有可用模板，请联系总部管理员发放后再新建或导入名片。</p>' : ''}
     <div class="panel table-wrap">
-      <p class="lede">共 ${state.employees.filter((item) => item.status !== 'closed').length} 个员工、${state.employees.filter((item) => item.status !== 'closed').reduce((count, item) => count + (item.cards || []).length, 0)} 张名片。每张名片单独显示，可直接编辑。</p>
+      <p class="lede">共 ${state.employees.filter((item) => item.status !== 'closed').length} 个员工、${state.employees.filter((item) => item.status !== 'closed').reduce((count, item) => count + (item.cards || []).length, 0)} 张名片。每张名片单独显示。${state.admin && state.admin.scope === 'company' ? '本公司名片可以编辑；其他公司使用本企业模板的名片只能查看。' : '可直接编辑。'}</p>
       <table class="cards-table">
         <colgroup>
           <col class="col-name"><col class="col-company"><col class="col-title"><col class="col-phone"><col class="col-email"><col class="col-template"><col class="col-status"><col class="col-ops">
@@ -420,6 +426,24 @@ function field(id, label, value, type, required) {
 }
 
 function employeeDialog(item) {
+  if (item.readOnly) {
+    return `
+      <dialog class="dialog">
+        <section>
+          <h3>查看共享名片</h3>
+          <p class="lede">该名片使用了本公司获配模板，因此可以查看；名片归属其他公司，不能在这里编辑或删除。</p>
+          <dl class="card-detail-list">
+            <dt>姓名</dt><dd>${esc(item.name || '未命名')}</dd>
+            <dt>公司</dt><dd>${esc(item.company || '')}</dd>
+            <dt>职业</dt><dd>${esc(item.title || '')}</dd>
+            <dt>名片联系电话</dt><dd>${esc(item.phone || '')}</dd>
+            <dt>邮箱</dt><dd>${esc(item.email || '')}</dd>
+            <dt>地址</dt><dd>${esc(item.address || '')}</dd>
+          </dl>
+          <menu><button class="btn secondary" type="button" data-action="close-dialog">关闭</button></menu>
+        </section>
+      </dialog>`;
+  }
   const cards = item.cards || [];
   const picker = item.id && cards.length ? `<div class="tpl-chooser">
       <label for="pick-card">名片</label>
@@ -565,9 +589,11 @@ async function loadVisits() {
 
 function visitsHtml() {
   const filter = state.visitFilter || {};
-  const options = state.employees.map((item) => (
-    `<option value="${esc(item.id)}" ${filter.cardId === item.id ? 'selected' : ''}>${esc(item.name)} ${esc(item.employeeNo)}</option>`
-  )).join('');
+  const options = state.employees.map((item) => {
+    const employeeNo = sharedReadOnlyAccount(item) ? '' : (item.employeeNo || '');
+    const label = [item.name, employeeNo].filter(Boolean).join(' ');
+    return `<option value="${esc(item.id)}" ${filter.cardId === item.id ? 'selected' : ''}>${esc(label)}</option>`;
+  }).join('');
   const rows = state.visits.map((item) => {
     const owner = state.employees.find((person) => person.id === item.cardId) || {};
     const viewerName = item.name || '游客访问';

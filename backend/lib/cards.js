@@ -225,14 +225,6 @@ function archiveCard(person, cardId) {
   return projectActive(reconcileActiveCard({ ...ready, cards }));
 }
 
-function archiveCompanyCards(person, companyId) {
-  const ready = ensureCards(person);
-  const cards = ready.cards.map((card) => card.companyId === companyId
-    ? { ...card, lifecycle: 'archived' }
-    : card);
-  return projectActive(reconcileActiveCard({ ...ready, cards }));
-}
-
 function assignCardCompany(person, cardId, companyId, companyName) {
   const ready = ensureCards(person);
   if (!ready.cards.some((card) => card.id === cardId)) return null;
@@ -354,7 +346,6 @@ module.exports = {
   writeCompanyTemplateCard,
   removeCard,
   archiveCard,
-  archiveCompanyCards,
   switchTo,
   projectCard,
   addCard,

@@ -1,4 +1,4 @@
-// Level-three templates are listed once; company choices remain explicit.
+// Templates are listed once; company choices remain explicit.
 function expandTemplateOptions(items) {
   return (items || []).flatMap((item) => Array.isArray(item.companyOptions)
     ? item.companyOptions.map((option) => ({ ...item, ...option }))
@@ -15,4 +15,23 @@ function templateCompanies(items) {
   return [...companies.values()];
 }
 
-module.exports = { expandTemplateOptions, templateCompanies };
+function templateSelection(options, templateId, companyId) {
+  const groups = new Map();
+  for (const item of options || []) {
+    if (!groups.has(item.id)) groups.set(item.id, []);
+    groups.get(item.id).push(item);
+  }
+  const selectedOptions = groups.get(templateId) || groups.values().next().value || [];
+  const selected = selectedOptions.find((item) => item.companyId === companyId) || selectedOptions[0];
+  const companies = templateCompanies(selectedOptions);
+  return {
+    templates: [...groups.values()].map((items) => items.find((item) => selected && item.companyId === selected.companyId) || items[0]),
+    draftTemplate: selected ? selected.id : '',
+    draftCompanyId: selected ? selected.companyId : '',
+    templateCompanies: companies,
+    templateCompanyIndex: Math.max(0, companies.findIndex((item) => selected && item.id === selected.companyId)),
+    chooseCompany: companies.length > 1,
+  };
+}
+
+module.exports = { expandTemplateOptions, templateCompanies, templateSelection };

@@ -721,7 +721,7 @@ test('changing ADMIN_PASS invalidates existing admin sessions', async () => {
   }
 });
 
-test('company admin isolation and pinned share links', async () => {
+test('company admin template visibility, ownership isolation and pinned share links', async () => {
   const hq = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
   assert.equal(hq.status, 200);
   const hqToken = hq.json.token;
@@ -789,7 +789,7 @@ test('company admin isolation and pinned share links', async () => {
   const hqOnly = await api('/api/employees', {
     method: 'POST',
     token: hqToken,
-    body: { name: '仅总部', phone: '13911110001', title: '经理' },
+    body: { name: '仅总部', phone: '13911110001', title: '经理', cardTemplate: 'wave' },
   });
   assert.equal(hqOnly.status, 201);
   const hqOnlyId = hqOnly.json.employee.id;
@@ -797,7 +797,7 @@ test('company admin isolation and pinned share links', async () => {
   const both = await api('/api/employees', {
     method: 'POST',
     token: hqToken,
-    body: { name: '总部名片', phone: '13911110002', title: '顾问', company: '总部' },
+    body: { name: '总部名片', phone: '13911110002', title: '顾问', company: '总部', cardTemplate: 'wave' },
   });
   assert.equal(both.status, 201);
   const personId = both.json.employee.id;

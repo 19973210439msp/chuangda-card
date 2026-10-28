@@ -70,6 +70,41 @@ test('admin card management shows account-only users and separates account phone
   assert.equal(pasted[0].title, '产品经理');
 });
 
+test('shared template cards are clearly read-only and hide account mutations from company admins', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../admin-web/js/app.js'), 'utf8');
+  const page = { innerHTML: '', querySelector: () => null };
+  const context = vm.createContext({
+    document: { querySelector: (selector) => selector === '#app' ? page : null, addEventListener: () => {} },
+    window: { addEventListener: () => {} }, location: { hash: '#/cards' }, token: () => '',
+  });
+  vm.runInContext(source, context);
+  const html = vm.runInContext(`
+    state.admin = { scope: 'company', companyId: 'viewer-company' };
+    state.templates = [{ id: 'shared-template', name: '共享模板' }];
+    state.employees = [{
+      id: 'person-shared', status: 'active', canManageAccount: false, canRemoveCompanyCards: false,
+      accountPhone: '13950800001', authPhone: '13950800001', employeeNo: 'SECRET-NO', department: '敏感部门',
+      cards: [{
+        id: 'card-shared', name: '共享员工', company: '所属公司', title: '产品经理',
+        phone: '13800000000', email: 'shared@example.com', address: '上海',
+        template: 'shared-template', templateLabel: '共享模板', lifecycle: 'active', canAdminEdit: false,
+      }],
+    }];
+    cardsHtml();
+  `, context);
+  assert.match(html, />查看<\/button><span class="muted">共享只读<\/span>/);
+  assert.doesNotMatch(html, /data-action="disable"|data-action="restore"|data-action="remove"/);
+  assert.doesNotMatch(html, /13950800001|SECRET-NO|敏感部门/);
+  const dialog = vm.runInContext(`
+    employeeDialog(cardFields(state.employees[0], state.employees[0].cards[0]));
+  `, context);
+  assert.match(dialog, /查看共享名片/);
+  assert.match(dialog, /不能在这里编辑或删除/);
+  assert.match(dialog, /共享员工|产品经理|13800000000/);
+  assert.doesNotMatch(dialog, /data-form="employee"|>保存<|delete-card/);
+  assert.doesNotMatch(dialog, /13950800001|SECRET-NO|敏感部门/);
+});
+
 test('success notice expires and clears when switching pages', async () => {
   const source = fs.readFileSync(path.join(__dirname, '../../admin-web/js/app.js'), 'utf8');
   const page = { innerHTML: '', querySelector: () => null };

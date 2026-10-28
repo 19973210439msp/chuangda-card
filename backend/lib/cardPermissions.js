@@ -1,4 +1,5 @@
 const { httpError } = require('./errors');
+const { allTemplates, templateGrantedTo } = require('./templates');
 
 function defaultPermissionEnabled() {
   return process.env.MINIPROGRAM_DEFAULT_CARD_PERMISSION_ENABLED === 'true';
@@ -37,6 +38,18 @@ function canManageCompany(permission, companyId) {
 
 function assertManageCompany(permission, companyId) {
   if (!canManageCompany(permission, companyId)) throw httpError(403, 'CARD_PERMISSION_REQUIRED', '没有该企业的名片操作权限，请联系管理员');
+}
+
+function canManageTemplate(permission, root, templateId) {
+  if (!allTemplates(root).some((template) => template.id === templateId)) return false;
+  return permission.level === 3 || (permission.level === 2
+    && permission.companyIds.some((companyId) => templateGrantedTo(root, templateId, companyId)));
+}
+
+function assertManageTemplate(permission, root, templateId) {
+  if (!canManageTemplate(permission, root, templateId)) {
+    throw httpError(403, 'CARD_PERMISSION_REQUIRED', '没有该模板的名片操作权限，请联系管理员');
+  }
 }
 
 function setPermission(person, admin, body) {
@@ -90,4 +103,4 @@ function mergePermissions(target, source) {
   return next;
 }
 
-module.exports = { defaultPermissionEnabled, normalizePermission, effectivePermission, canManageCompany, assertManageCompany, setPermission, mergePermissions };
+module.exports = { defaultPermissionEnabled, normalizePermission, effectivePermission, canManageCompany, assertManageCompany, canManageTemplate, assertManageTemplate, setPermission, mergePermissions };

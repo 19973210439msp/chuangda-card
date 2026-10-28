@@ -6,7 +6,7 @@ const { blankPerson, nowIso } = require('./person');
 const { consumeCode } = require('./verify');
 const { phoneFromWechatCode } = require('./wechat');
 const { writeActive, assignCardCompany, ensureCards, activeCard } = require('./cards');
-const { effectivePermission, assertManageCompany } = require('./cardPermissions');
+const { effectivePermission, assertManageCompany, assertManageTemplate } = require('./cardPermissions');
 const { templateGrantedTo, allTemplates } = require('./templates');
 const { isReviewEntryCompany, isReviewEntryPerson } = require('./reviewEntry');
 const {
@@ -27,11 +27,14 @@ async function saveSelfCard(store, person, body) {
   const permission = effectivePermission(person, root);
   const active = activeCard(person);
   if (!active) throw httpError(409, 'NO_ACTIVE_CARD', '请联系管理员分配名片');
-  assertManageCompany(permission, active.companyId);
-  if (body.companyId !== undefined) assertManageCompany(permission, String(body.companyId || ''));
+  assertManageTemplate(permission, root, active.template);
+  if (body.companyId !== undefined && String(body.companyId || '') !== active.companyId) {
+    assertManageCompany(permission, String(body.companyId || ''));
+  }
   const templateId = body.cardTemplate === undefined ? active.template : String(body.cardTemplate);
   const selected = allTemplates(root).find((template) => template.id === templateId);
   if (!selected) throw httpError(400, 'VALIDATION_ERROR', '模板不存在');
+  assertManageTemplate(permission, root, templateId);
   const wantedCompanyId = body.companyId === undefined ? active.companyId : String(body.companyId || '');
   if ((templateId !== active.template || wantedCompanyId !== active.companyId)
     && permission.level !== 3 && !templateGrantedTo(root, templateId, wantedCompanyId)) {

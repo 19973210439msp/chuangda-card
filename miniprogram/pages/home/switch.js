@@ -1,7 +1,7 @@
 const { request } = require('../../utils/request');
 const { ensureLogin } = require('../../utils/guard');
 const { decorateCompany, pageScrollHeight } = require('../../utils/util');
-const { expandTemplateOptions, templateCompanies } = require('../../utils/template-options');
+const { expandTemplateOptions, templateSelection } = require('../../utils/template-options');
 
 Page({
   data: {
@@ -81,28 +81,16 @@ Page({
       const cards = allCards.filter((card) => card.lifecycle === 'active');
       const archivedCards = allCards.filter((card) => card.lifecycle === 'archived');
       const current = cards.find((card) => card.id === employee.activeCardId);
-      const companies = templateCompanies(allTemplates);
-      const chooseCompany = !!(available.permission && available.permission.level === 3);
-      let templateCompanyIndex = companies.findIndex((item) => current && item.id === current.companyId);
-      if (templateCompanyIndex < 0) templateCompanyIndex = Math.max(0, companies.findIndex((item) => item.id === 'default'));
-      const companyId = companies[templateCompanyIndex] ? companies[templateCompanyIndex].id : '';
-      const templates = chooseCompany ? allTemplates.filter((item) => item.companyId === companyId) : allTemplates;
-      const selected = templates.find((item) => current && item.id === current.template && item.companyId === current.companyId)
-        || templates[0];
+      const selection = templateSelection(allTemplates, current && current.template, current && current.companyId);
       this.setData({
         cards,
         archivedCards,
         canEdit: !!me.canEdit,
-        canCreate: !!templates.length,
+        canCreate: !!selection.templates.length,
         company: brand,
         activeCardId: employee.activeCardId || '',
-        templates,
         allTemplates,
-        templateCompanies: companies,
-        templateCompanyIndex,
-        chooseCompany,
-        draftTemplate: selected ? selected.id : '',
-        draftCompanyId: selected ? selected.companyId : '',
+        ...selection,
         error: '',
       });
     }).catch((err) => this.setData({ error: err.message }));
@@ -144,22 +132,16 @@ Page({
     });
   },
   onTemplate(event) {
-    this.setData({
-      draftTemplate: event.currentTarget.dataset.template,
-      draftCompanyId: event.currentTarget.dataset.company || '',
-    });
+    if (this.data.creating) return;
+    this.setData(templateSelection(this.data.allTemplates,
+      event.currentTarget.dataset.template, event.currentTarget.dataset.company || ''));
   },
   onTemplateCompanyChange(event) {
     const index = Number(event.detail.value);
     const company = this.data.templateCompanies[index];
     if (!this.data.chooseCompany || !Number.isInteger(index) || !company || this.data.creating) return;
-    const templates = this.data.allTemplates.filter((item) => item.companyId === company.id);
-    const selected = templates.find((item) => item.id === this.data.draftTemplate) || templates[0];
     this.setData({
-      templateCompanyIndex: index,
-      templates,
-      draftTemplate: selected ? selected.id : '',
-      draftCompanyId: selected ? selected.companyId : '',
+      ...templateSelection(this.data.allTemplates, this.data.draftTemplate, company.id),
       error: '',
     });
   },

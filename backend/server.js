@@ -12,10 +12,11 @@ const { stripAvatarPortrait } = require('./lib/media');
 const { openIdFromCode, phoneFromWechatCode } = require('./lib/wechat');
 const { claimImportedCard } = require('./lib/claim');
 const { saveSelfCard, rememberOpenAccount } = require('./lib/contact');
-const { writeDefault, writeCard, writeCompanyTemplateCard, removeCard, archiveCard, archiveCompanyCards, addCard, switchTo, ensureCards, projectCard, projectActive } = require('./lib/cards');
+const { writeDefault, writeCard, writeCompanyTemplateCard, removeCard, archiveCard, addCard, switchTo, ensureCards, projectCard, projectActive } = require('./lib/cards');
 const { publicCardState } = require('./lib/cardAccess');
+const { canViewAdminCard, canEditAdminCard } = require('./lib/adminCardAccess');
 const { allTemplates, listTemplates, visibleTemplates, templateGrantedTo, setBuiltInAssignments, createTemplate, companyForTemplate } = require('./lib/templates');
-const { defaultPermissionEnabled, normalizePermission, effectivePermission, canManageCompany, assertManageCompany, setPermission, mergePermissions } = require('./lib/cardPermissions');
+const { defaultPermissionEnabled, normalizePermission, effectivePermission, canManageCompany, assertManageCompany, canManageTemplate, assertManageTemplate, setPermission, mergePermissions } = require('./lib/cardPermissions');
 const { migrateCardRecords } = require('./lib/cardMigration');
 const {
   text,
@@ -297,17 +298,30 @@ function personRelatedToCompany(person, companyId) {
     || ensureCards(person).cards.some((card) => card.companyId === companyId);
 }
 
-function viewForAdmin(person, admin) {
+function redactUnrelatedAccount(view, person, admin) {
+  if (!view || !admin || admin.scope !== 'company' || personRelatedToCompany(person, admin.companyId)) return view;
+  return {
+    ...view,
+    authPhone: '',
+    accountPhone: '',
+    employeeNo: '',
+    department: '',
+  };
+}
+
+function viewForAdmin(person, admin, root) {
   if (!person) return null;
   if (!admin || admin.scope === 'hq') return person;
+  if (isReviewEntryPerson(person)) return null;
   const ready = ensureCards(person);
-  const cards = ready.cards.filter((card) => card.companyId === admin.companyId);
+  const cards = ready.cards.filter((card) => canViewAdminCard(root, admin, card));
   if (!cards.length && !personRelatedToCompany(person, admin.companyId)) return null;
   const active = cards.find((card) => card.id === ready.activeCardId && card.lifecycle === 'active')
     || cards.find((card) => card.lifecycle === 'active');
-  if (active) return projectCard({ ...ready, cards }, active.id);
-  if (cards.length) return { ...projectCard({ ...ready, cards }, cards[0].id), activeCardId: '' };
-  return {
+  const finish = (view) => redactUnrelatedAccount(view, person, admin);
+  if (active) return finish(projectCard({ ...ready, cards }, active.id));
+  if (cards.length) return finish({ ...projectCard({ ...ready, cards }, cards[0].id), activeCardId: '' });
+  return finish({
     ...ready,
     cards: [],
     activeCardId: '',
@@ -323,29 +337,43 @@ function viewForAdmin(person, admin) {
     companyId: '',
     cardTemplate: '',
     templateName: '',
-  };
+  });
 }
 
-function employeeForAdmin(person, admin) {
-  if (!admin || admin.scope !== 'company') return person ? toSelf(person) : null;
-  const view = viewForAdmin(person, admin);
-  return view ? toSelf(view) : null;
+function employeeForAdmin(person, admin, root) {
+  const view = viewForAdmin(person, admin, root);
+  if (!view) return null;
+  const result = toSelf(view);
+  result.cards = result.cards.map((card) => ({ ...card, canAdminEdit: canEditAdminCard(root, admin, card) }));
+  result.canManageAccount = !admin || admin.scope === 'hq';
+  result.canRemoveCompanyCards = result.canManageAccount || result.cards.some((card) => card.canAdminEdit);
+  if (admin && admin.scope === 'company' && !personRelatedToCompany(person, admin.companyId)) {
+    result.authPhone = '';
+    result.accountPhone = '';
+    result.employeeNo = '';
+    result.department = '';
+  }
+  return result;
 }
 
 async function visibleCompanyScope(admin) {
   if (!admin || admin.scope !== 'company') return null;
   const people = await store.listPeople({ kind: 'employee' });
+  const root = await store.getCompany('default');
   const personIds = [];
   const cardIds = [];
+  const visiblePeople = [];
   for (const person of people) {
+    if (isReviewEntryPerson(person)) continue;
     const cards = ensureCards(person).cards.filter((card) => (
-      card.companyId === admin.companyId && card.lifecycle === 'active'
+      canViewAdminCard(root, admin, card) && card.lifecycle === 'active'
     ));
     if (!cards.length) continue;
     personIds.push(person.id);
     cardIds.push(...cards.map((card) => card.id));
+    visiblePeople.push(viewForAdmin(person, admin, root));
   }
-  return { personIds, cardIds };
+  return { personIds, cardIds, people: visiblePeople };
 }
 
 async function companyTargetForAdmin(admin, requestedCompanyId) {
@@ -699,11 +727,11 @@ app.get('/api/employees', asyncRoute(async (req, res) => {
   const q = req.query.q || '';
   const admin = adminOf(req);
   const people = await store.listPeople({ kind: 'employee' });
+  const root = await store.getCompany('default');
   const items = people
     .filter((person) => !isReviewEntryPerson(person))
-    .map((person) => viewForAdmin(person, admin))
-    .filter((person) => person && matchesQuery(person, q))
-    .map(toSelf);
+    .map((person) => employeeForAdmin(person, admin, root))
+    .filter((person) => person && matchesQuery(person, q));
   res.json({ items });
 }));
 
@@ -727,7 +755,7 @@ app.post('/api/employees', asyncRoute(async (req, res) => {
   assertStaffIdentity(draft);
   const result = await upsertImported(draft, { createNewCard: true });
   res.status(result.merged ? 200 : 201).json({
-    employee: employeeForAdmin(result.employee, admin),
+    employee: employeeForAdmin(result.employee, admin, await store.getCompany('default')),
     merged: result.merged,
   });
 }));
@@ -782,8 +810,9 @@ async function importEmployeeList(list, res, options) {
     catch (err) { rejected.push({ row: draft.importRow, name: draft.name || '', reason: err.message }); }
   }
   const admin = options && options.admin;
+  const root = await store.getCompany('default');
   res.status(201).json({
-    items: saved.map((item) => ({ ...(employeeForAdmin(item.employee, admin) || toSelf(item.employee)), merged: item.merged })),
+    items: saved.map((item) => ({ ...employeeForAdmin(item.employee, admin, root), merged: item.merged })),
     rejected,
   });
 }
@@ -882,9 +911,9 @@ app.post('/api/employees/:id/merge', asyncRoute(async (req, res) => {
 app.get('/api/employees/:id', asyncRoute(async (req, res) => {
   requireAdmin(req);
   const person = await store.getPerson(req.params.id);
-  const view = viewForAdmin(person, adminOf(req));
+  const view = employeeForAdmin(person, adminOf(req), await store.getCompany('default'));
   if (!person || person.kind !== 'employee' || !view) throw httpError(404, 'NOT_FOUND', '员工不存在');
-  res.json({ employee: toSelf(view) });
+  res.json({ employee: view });
 }));
 
 app.put('/api/employees/:id', asyncRoute(async (req, res) => {
@@ -895,10 +924,11 @@ app.put('/api/employees/:id', asyncRoute(async (req, res) => {
   const cardId = text(body.cardId, 40);
   const admin = adminOf(req);
   const ready = ensureCards(person);
+  const root = await store.getCompany('default');
   if (admin.scope === 'company') {
     if (!cardId) throw httpError(400, 'VALIDATION_ERROR', '请指定要修改的名片');
     const owned = ready.cards.find((card) => (
-      card.id === cardId && card.companyId === admin.companyId && card.lifecycle === 'active'
+      card.id === cardId && canEditAdminCard(root, admin, card)
     ));
     if (!owned) throw httpError(403, 'FORBIDDEN', '只能管理本公司的名片');
     delete body.status;
@@ -932,7 +962,7 @@ app.put('/api/employees/:id', asyncRoute(async (req, res) => {
     if (!stored) throw httpError(404, 'NOT_FOUND', '名片不存在');
   }
   const saved = await store.updatePerson(person.id, stored);
-  const visible = employeeForAdmin(saved, admin);
+  const visible = employeeForAdmin(saved, admin, root);
   if (!visible) throw httpError(404, 'NOT_FOUND', '员工不存在');
   res.json({ employee: visible });
 }));
@@ -944,11 +974,12 @@ app.delete('/api/employees/:id', asyncRoute(async (req, res) => {
   const admin = adminOf(req);
   if (admin.scope === 'company') {
     const ready = ensureCards(person);
+    const root = await store.getCompany('default');
     const mine = ready.cards.filter((card) => (
-      card.companyId === admin.companyId && card.lifecycle === 'active'
+      canEditAdminCard(root, admin, card)
     ));
     if (!mine.length) throw httpError(404, 'NOT_FOUND', '员工不存在');
-    const next = archiveCompanyCards(person, admin.companyId);
+    const next = mine.reduce((value, card) => archiveCard(value, card.id), person);
     next.updatedAt = nowIso();
     await store.updatePerson(person.id, next);
 
@@ -1004,7 +1035,7 @@ function permissionAccountVisible(person, admin) {
 function permissionAccount(person, admin, root) {
   const permission = effectivePermission(person, root);
   const cards = ensureCards(person).cards.filter((card) => card.lifecycle === 'active'
-    && (admin.scope === 'hq' || card.companyId === admin.companyId));
+    && (admin.scope === 'hq' || (card.companyId === admin.companyId && canViewAdminCard(root, admin, card))));
   const card = cards.find((item) => item.id === person.activeCardId) || cards[0];
   return {
     id: person.id,
@@ -1078,8 +1109,8 @@ app.get('/api/employee/me', asyncRoute(async (req, res) => {
   const permission = effectivePermission(user, root);
   employee.cards = employee.cards.filter((card) => card.lifecycle !== 'deleted').map((card) => ({
     ...card,
-    canEdit: card.lifecycle === 'active' && canManageCompany(permission, card.companyId),
-    canDelete: canManageCompany(permission, card.companyId),
+    canEdit: card.lifecycle === 'active' && canManageTemplate(permission, root, card.template),
+    canDelete: canManageTemplate(permission, root, card.template),
   }));
   const company = employee.companyId ? await store.getCompany(employee.companyId) : null;
   const cardCompanies = {};
@@ -1115,13 +1146,9 @@ app.get('/api/employee/templates', asyncRoute(async (req, res) => {
         company: publicCompany(companyForTemplate(company, root, template.id)),
       });
     }
-    if (permission.level === 3) {
-      const preferred = companyOptions.find((option) => (template.companyIds || []).includes(option.companyId))
-        || companyOptions[0];
-      if (preferred) items.push({ id: template.id, name: template.name, ...preferred, companyOptions });
-    } else {
-      items.push(...companyOptions.map((option) => ({ id: template.id, name: template.name, ...option })));
-    }
+    const preferred = companyOptions.find((option) => (template.companyIds || []).includes(option.companyId))
+      || companyOptions[0];
+    if (preferred) items.push({ id: template.id, name: template.name, ...preferred, companyOptions });
   }
   res.json({ items, permission });
 }));
@@ -1180,7 +1207,8 @@ app.delete('/api/employee/cards/:cardId', asyncRoute(async (req, res) => {
   const user = requireEmployee(req);
   const card = ensureCards(user).cards.find((item) => item.id === req.params.cardId && item.lifecycle !== 'deleted');
   if (!card) throw httpError(404, 'NOT_FOUND', '名片不存在');
-  assertManageCompany(effectivePermission(user, await store.getCompany('default')), card.companyId);
+  const root = await store.getCompany('default');
+  assertManageTemplate(effectivePermission(user, root), root, card.template);
   let next;
   try {
     next = projectActive({ ...user, cards: user.cards.map((item) => item.id === card.id
@@ -1202,9 +1230,8 @@ app.delete('/api/employees/:id/cards/:cardId', asyncRoute(async (req, res) => {
   const card = ready.cards.find((item) => item.id === req.params.cardId);
   if (!card) throw httpError(404, 'NOT_FOUND', '名片不存在');
   const admin = adminOf(req);
-  if (admin.scope === 'company' && (
-    card.companyId !== admin.companyId || card.lifecycle !== 'active'
-  )) {
+  const root = await store.getCompany('default');
+  if (admin.scope === 'company' && !canEditAdminCard(root, admin, card)) {
     throw httpError(403, 'FORBIDDEN', '只能删除本公司的名片');
   }
   let next;
@@ -1218,7 +1245,7 @@ app.delete('/api/employees/:id/cards/:cardId', asyncRoute(async (req, res) => {
   if (!next) throw httpError(404, 'NOT_FOUND', '名片不存在');
   next.updatedAt = nowIso();
   const saved = await store.updatePerson(person.id, next);
-  res.json({ employee: employeeForAdmin(saved, admin) });
+  res.json({ employee: employeeForAdmin(saved, admin, root) });
 }));
 
 app.get('/api/cards/:id/qr', asyncRoute(async (req, res) => {
@@ -1337,8 +1364,7 @@ app.get('/api/analytics/summary', asyncRoute(async (req, res) => {
     const scope = await visibleCompanyScope(adminOf(req));
     people = (await store.listPeople({ kind: 'employee' })).filter((person) => !isReviewEntryPerson(person));
     if (scope) {
-      const allowed = new Set(scope.personIds);
-      people = people.filter((person) => allowed.has(person.id));
+      people = scope.people;
       shareCardIds = scope.cardIds;
     }
     if (req.query.cardId) people = people.filter((person) => person.id === req.query.cardId);
@@ -1359,6 +1385,7 @@ app.get('/api/analytics/summary', asyncRoute(async (req, res) => {
 app.get('/api/analytics/list', asyncRoute(async (req, res) => {
   const auth = requireUser(req);
   let cardId = text(req.query.cardId, 64);
+  let scopedPeople;
   if (auth.role === 'employee') {
     if (!req.user || req.user.status !== 'active') throw httpError(403, 'ACCOUNT_INACTIVE', '账号已注销或已停用');
     if (cardId && cardId !== req.user.id) throw httpError(403, 'FORBIDDEN', '只能查看自己的名片数据');
@@ -1367,6 +1394,7 @@ app.get('/api/analytics/list', asyncRoute(async (req, res) => {
     requireAdmin(req);
     const scope = await visibleCompanyScope(adminOf(req));
     if (scope) {
+      scopedPeople = scope.people;
       if (cardId && !scope.personIds.includes(cardId)) throw httpError(403, 'FORBIDDEN', '只能查看本公司的名片数据');
       if (!cardId) req.companyCardIds = scope.personIds;
       req.companyShareCardIds = scope.cardIds;
@@ -1390,7 +1418,7 @@ app.get('/api/analytics/list', asyncRoute(async (req, res) => {
     limit,
     offset,
   });
-  const people = await store.listPeople({ kind: 'employee' });
+  const people = scopedPeople || await store.listPeople({ kind: 'employee' });
   const names = new Map(people.map((person) => [person.id, person.name]));
   const items = pageResult.items.map((view) => {
     const exchange = view.exchange || null;
