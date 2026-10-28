@@ -21,6 +21,22 @@ function holderCardPath(cardId, shareCardId) {
   return sharedCardPath(cardId, shareCardId, false) + '&from=holder';
 }
 
+const SHARE_SCENES = [1007, 1008, 1036, 1044, 1047, 1048, 1049, 1065, 1167, 1179, 1194];
+
+function sharedEntryPath(enter, pendingCardId) {
+  if (value(pendingCardId)) return '';
+  const query = enter && enter.query ? enter.query : {};
+  const cardId = value(query.cardId);
+  if (!cardId) return '';
+  const path = String((enter && enter.path) || '');
+  if (path.indexOf('pages/client/card') >= 0) return sharedCardPath(cardId, query.shareCard, false);
+  const openedLogin = !path || path.indexOf('pages/login/') >= 0;
+  if (openedLogin && SHARE_SCENES.indexOf(Number(enter && enter.scene)) >= 0) {
+    return sharedCardPath(cardId, query.shareCard, false);
+  }
+  return '';
+}
+
 function cardDetailRequest(cardId, shareCardId, from) {
   const shared = value(shareCardId);
   const query = shared ? '?shareCard=' + encodeURIComponent(shared) : '';
@@ -31,4 +47,4 @@ function cardDetailRequest(cardId, shareCardId, from) {
   };
 }
 
-module.exports = { favoritePayload, sharedCardPath, holderCardPath, cardDetailRequest };
+module.exports = { favoritePayload, sharedCardPath, sharedEntryPath, holderCardPath, cardDetailRequest };

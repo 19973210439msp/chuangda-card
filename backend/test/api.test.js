@@ -1195,6 +1195,8 @@ test('hq creates a named classic template and assigns it to one subsidiary', asy
   const publicCard = await api('/api/cards/' + employee.json.employee.id);
   assert.equal(publicCard.json.company.name, '苏州创新科技有限公司');
   assert.equal(publicCard.json.company.qrUrl, '/uploads/test-qr.png');
+  assert.equal(publicCard.json.company.phone, '021-5888 6080');
+  assert.equal(publicCard.json.company.address, '上海市浦东新区金桥红枫路288号');
   const updated = await api('/api/templates/' + templateId, {
     method: 'PUT', token: hq.json.token,
     body: {

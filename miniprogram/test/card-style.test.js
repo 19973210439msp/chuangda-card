@@ -14,6 +14,7 @@ function loadPage(file, request = async () => ({})) {
       if (name.endsWith('/template-options')) return require('../utils/template-options');
       if (name.endsWith('/card-home-state')) return { emptyCardState: () => ({}) };
       if (name.endsWith('/api-base')) return {};
+      if (name.endsWith('/favorite-flow')) return require('../utils/favorite-flow');
       return { decorateCompany: (value) => value, decorateCard: (value) => value, pageScrollHeight: () => 600 };
     },
     Page(value) { page = value; },

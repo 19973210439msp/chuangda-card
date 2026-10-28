@@ -2,7 +2,7 @@ const { request } = require('../../utils/request');
 const { pageScrollHeight } = require('../../utils/util');
 const accounts = require('../../utils/accounts');
 const { phoneAuthError, phoneCodeFromEvent } = require('../../utils/phone-auth');
-const { favoritePayload, sharedCardPath } = require('../../utils/favorite-flow');
+const { favoritePayload, sharedCardPath, sharedEntryPath } = require('../../utils/favorite-flow');
 
 Page({
   data: {
@@ -18,6 +18,14 @@ Page({
     this.setData({ scrollHeight: pageScrollHeight() });
   },
   onShow() {
+    const shared = sharedEntryPath(
+      typeof wx.getEnterOptionsSync === 'function' ? wx.getEnterOptionsSync() : {},
+      wx.getStorageSync('pendingCardId')
+    );
+    if (shared) {
+      wx.redirectTo({ url: shared });
+      return;
+    }
     const notice = wx.getStorageSync('loginNotice');
     if (notice) {
       wx.removeStorageSync('loginNotice');

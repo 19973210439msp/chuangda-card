@@ -1,6 +1,6 @@
 const { request } = require('../../utils/request');
 const { decorateCard, decorateCompany, visitorId, pageScrollHeight } = require('../../utils/util');
-const { favoritePayload, cardDetailRequest } = require('../../utils/favorite-flow');
+const { favoritePayload, cardDetailRequest, sharedCardPath } = require('../../utils/favorite-flow');
 
 function contactClient() {
   let info = {};
@@ -220,7 +220,7 @@ Page({
     const card = this.data.card || {};
     return {
       title: '这是我的数字名片，望惠存',
-      path: '/pages/client/card?cardId=' + this.cardId + (this.shareCard ? '&shareCard=' + this.shareCard : ''),
+      path: sharedCardPath(this.cardId, this.shareCard, false),
     };
   },
 });

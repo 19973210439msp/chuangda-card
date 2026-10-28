@@ -234,13 +234,16 @@ function templateChooser(name, selected) {
 
 function cardFace(kind) {
   const custom = (state.templates || []).find((item) => item.id === kind);
+  const brand = state.company || {};
+  const tel = brand.phone || '021-5888 6080';
+  const add = brand.address || '上海市浦东新区金桥红枫路288号';
   if (kind === 'horizon') {
-    return `<div class="pv pv-horizon"><div class="pv-hz-side"><span class="pv-hz-brand">创大产控</span><span class="pv-hz-name">张伟</span><span class="pv-hz-title">客户经理</span></div><div class="pv-hz-main"><span class="pv-hz-company">上海创大产控高新技术集团有限公司</span><span class="pv-hz-line">手机 13800000000</span><span class="pv-hz-line">邮箱 zhangwei@chuangda.com</span><span class="pv-hz-line">地址 上海市浦东新区金桥红枫路288号</span><img class="pv-hz-qr" src="/official-qr.jpg" alt=""></div></div>`;
+    return `<div class="pv pv-horizon"><div class="pv-hz-side"><span class="pv-hz-brand">创大产控</span><span class="pv-hz-name">张伟</span><span class="pv-hz-title">客户经理</span></div><div class="pv-hz-main"><span class="pv-hz-company">上海创大产控高新技术集团有限公司</span><span class="pv-hz-line">手机 13800000000</span><span class="pv-hz-line">邮箱 zhangwei@chuangda.com</span><span class="pv-hz-line">地址 ${esc(add)}</span><img class="pv-hz-qr" src="/official-qr.jpg" alt=""></div></div>`;
   }
   if (kind === 'wave') {
-    return `<div class="pv pv-wave"><img class="pv-wave-bg" src="/wave-front.jpg" alt=""><span class="pv-wv-name">张伟</span><span class="pv-wv-title">客户经理</span><span class="pv-wv-row pv-wv-phone">13800000000</span><span class="pv-wv-row pv-wv-email">zhangwei@chuangda.com</span><span class="pv-wv-row pv-wv-address">上海市浦东新区金桥红枫路288号</span><img class="pv-wv-qr" src="/official-qr.jpg" alt=""></div>`;
+    return `<div class="pv pv-wave"><img class="pv-wave-bg" src="/wave-front.jpg" alt=""><span class="pv-wv-name">张伟</span><span class="pv-wv-title">客户经理</span><span class="pv-wv-row pv-wv-phone">13800000000</span><span class="pv-wv-row pv-wv-email">zhangwei@chuangda.com</span><span class="pv-wv-row pv-wv-address">${esc(add)}</span><img class="pv-wv-qr" src="/official-qr.jpg" alt=""></div>`;
   }
-  return `<div class="pv pv-classic"><div class="pv-corp"><span class="pv-corp-cn">${esc(custom && custom.companyName || '上海创大产控高新技术集团有限公司')}</span><span class="pv-corp-en">${esc(custom && custom.companyNameEn || 'SHANGHAI CHUANGDA CHANKONG HI-TECH GROUP CO., LTD.')}</span></div><div class="pv-brand"><img class="pv-seal" src="/brand-logo.png?v=3" alt=""><span class="pv-brand-cn">${esc(custom && custom.shortName || '创大产控')}</span><span class="pv-brand-en">${esc(custom && custom.shortNameEn || 'CHUANGDACHANKONG')}</span></div><div class="pv-who"><span class="pv-name">张伟</span><span class="pv-title">客户经理</span></div><span class="pv-mobile">M:13800000000</span><span class="pv-tick"></span><div class="pv-contact"><span>电话/Tel:021-5888 6080</span><span>邮箱/E-mail:zhangwei@chuangda.com</span><span>地址/Add:上海市浦东新区金桥红枫路288号</span></div><img class="pv-qr" src="${esc(custom && custom.qrUrl || '/official-qr.jpg')}" alt=""></div>`;
+  return `<div class="pv pv-classic"><div class="pv-corp"><span class="pv-corp-cn">${esc(custom && custom.companyName || '上海创大产控高新技术集团有限公司')}</span><span class="pv-corp-en">${esc(custom && custom.companyNameEn || 'SHANGHAI CHUANGDA CHANKONG HI-TECH GROUP CO., LTD.')}</span></div><div class="pv-brand"><img class="pv-seal" src="/brand-logo.png?v=3" alt=""><span class="pv-brand-cn">${esc(custom && custom.shortName || '创大产控')}</span><span class="pv-brand-en">${esc(custom && custom.shortNameEn || 'CHUANGDACHANKONG')}</span></div><div class="pv-who"><span class="pv-name">张伟</span><span class="pv-title">客户经理</span></div><span class="pv-mobile">M:13800000000</span><span class="pv-tick"></span><div class="pv-contact"><span>电话/Tel:${esc(tel)}</span><span>邮箱/E-mail:zhangwei@chuangda.com</span><span>地址/Add:${esc(add)}</span></div><img class="pv-qr" src="${esc(custom && custom.qrUrl || '/official-qr.jpg')}" alt=""></div>`;
 }
 
 function templateGallery() {
@@ -501,7 +504,7 @@ function brandHtml() {
   const company = state.company || {};
   return shell('品牌设置', `
     <form class="panel" data-form="brand">
-      <p class="lede">这里的名称、标识、模板和颜色会用在员工名片和对外 H5 页上。</p>
+      <p class="lede">名片按模板上印的公司名来取电话和地址。名称和这里的公司名一致时，用这里填写的；对不上，或这里留空，就用总部的。</p>
       <div class="grid-2">
         <div>${field('name', '公司全称', company.name)}</div>
         <div>${field('shortName', '简称', company.shortName)}</div>
@@ -541,7 +544,7 @@ function templatesHtml() {
       <span class="template-row-view">查看模板图 <span aria-hidden="true">›</span></span>
     </button>`).join('');
   return shell('模板管理', `
-    <p class="lede">${isHq ? '点击模板查看名片图和已分配的企业。' : '这里只显示总部明确发放给本公司的模板。模板授权由总部管理员统一管理。'}</p>
+    <p class="lede">${isHq ? '点击模板查看名片图和已分配的企业。电话和地址按模板上的公司名匹配子公司；匹配不上，或该公司没填，就用总部的。同一种模板分给多家企业时，默认先显示总公司。' : '这里只显示总部明确发放给本公司的模板。电话和地址按模板上的公司名匹配；匹配不上就用总部的。'}</p>
     ${isHq ? `<details class="panel template-builder" ${editing ? 'open' : ''}>
       <summary><strong>${editing ? '修改名片模板：' + esc(editing.name) : '＋ 创建名片模板'}</strong><span>基于创大产控模板，设置公司文案、二维码与使用范围</span></summary>
       <form data-form="template" enctype="multipart/form-data">

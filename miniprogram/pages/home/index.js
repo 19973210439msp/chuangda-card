@@ -1,6 +1,7 @@
 const { request } = require('../../utils/request');
 const { decorateCard, decorateCompany, pageScrollHeight } = require('../../utils/util');
 const { ensureLogin } = require('../../utils/guard');
+const { sharedCardPath } = require('../../utils/favorite-flow');
 const { emptyCardState } = require('../../utils/card-home-state');
 const apiBaseUtil = require('../../utils/api-base');
 
@@ -123,7 +124,7 @@ Page({
     if (!this.data.hasCard) return { title: '创大产控', path: '/pages/home/index' };
     return {
       title: '这是我的数字名片，望惠存',
-      path: '/pages/client/card?cardId=' + card.id + (card.activeCardId ? '&shareCard=' + card.activeCardId : ''),
+      path: sharedCardPath(card.id, card.activeCardId, false),
     };
   },
 });

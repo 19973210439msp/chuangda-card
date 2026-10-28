@@ -205,3 +205,25 @@ test('certification entry is removed and default policy form only appears for en
   const sub = vm.runInContext('certHtml()', context);
   assert.doesNotMatch(sub, /data-form="permission-policy"|value="3"/);
 });
+
+test('shared templates tell each company to fill its own phone and address', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../admin-web/js/app.js'), 'utf8');
+  const context = vm.createContext({
+    document: { querySelector: (selector) => selector === '#app' ? { innerHTML: '', querySelector: () => null } : null, addEventListener: () => {} },
+    window: { addEventListener: () => {} }, location: { hash: '' }, token: () => '',
+  });
+  vm.runInContext(source, context);
+  vm.runInContext(`
+    state.admin = { scope: 'hq' };
+    state.company = { name: '总部', phone: '021-5888 6080', address: '上海市浦东新区金桥红枫路288号' };
+    state.templates = [];
+    state.companies = [];
+  `, context);
+  const templates = vm.runInContext('templatesHtml()', context);
+  assert.match(templates, /按模板上的公司名匹配子公司/);
+  assert.doesNotMatch(templates, /name="phone"|name="address"/);
+  const brand = vm.runInContext('brandHtml()', context);
+  assert.match(brand, /模板上印的公司名/);
+  assert.match(brand, /对不上，或这里留空，就用总部的/);
+  assert.match(brand, /021-5888 6080/);
+});
