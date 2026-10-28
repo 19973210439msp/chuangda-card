@@ -44,6 +44,13 @@ const {
   reviewCompanyVisible,
   stripCertificationCode,
 } = require('./lib/reviewTest');
+const {
+  REVIEW_COMPANY_ID,
+  REVIEW_PERSON_ID,
+  isReviewEntryPerson,
+  isReviewEntryCompany,
+  resetReviewEntry,
+} = require('./lib/reviewEntry');
 
 let store;
 try {
@@ -107,7 +114,16 @@ app.use(asyncRoute(async (req, res, next) => {
     };
   }
   req.auth = session;
-  if (session.role === 'employee') req.user = await store.getPerson(session.userId);
+  if (session.role === 'employee') {
+    const user = await store.getPerson(session.userId);
+    if (isReviewEntryPerson(user) && (
+      !config.reviewEntryEnabled() || session.secretStamp !== config.reviewEntryCodeHash()
+    )) {
+      await store.deleteSession(token);
+      return next();
+    }
+    req.user = user;
+  }
   next();
 }));
 
@@ -352,16 +368,23 @@ async function allowedCardTemplate(templateId, admin, companyId) {
   return selected;
 }
 
-async function managedCompanies() {
+async function managedCompanies({ includeReviewEntry = false } = {}) {
   return (await store.listCompanies())
-    .filter(reviewCompanyVisible)
+    .filter((company) => reviewCompanyVisible(company) || (includeReviewEntry && isReviewEntryCompany(company)))
     .map(stripCertificationCode);
 }
 
 function publicCompany(company) {
   if (!company) return company;
-  const { cardTemplates, cardTemplateGrants, defaultCardPermission, reviewOnly, ...rest } = stripCertificationCode(company);
+  const { cardTemplates, cardTemplateGrants, defaultCardPermission, reviewOnly, reviewEntry, ...rest } = stripCertificationCode(company);
   return rest;
+}
+
+function publicTemplate(template) {
+  return {
+    ...template,
+    companyIds: (template.companyIds || []).filter((id) => id !== REVIEW_COMPANY_ID),
+  };
 }
 
 app.get('/api/companies', asyncRoute(async (req, res) => {
@@ -409,7 +432,34 @@ app.post('/api/company-admins', asyncRoute(async (req, res) => {
 }));
 
 app.get('/api/auth/options', asyncRoute(async (req, res) => {
-  res.json({ wechatSkip: config.wechatSkipAllowed() });
+  res.json({
+    wechatSkip: config.wechatSkipAllowed(),
+    reviewEntryEnabled: config.reviewEntryEnabled(),
+  });
+}));
+
+app.post('/api/auth/review-login', asyncRoute(async (req, res) => {
+  if (!config.reviewEntryEnabled()) {
+    throw httpError(404, 'REVIEW_ENTRY_DISABLED', '审核体验入口未开启');
+  }
+  const ip = clientIp(req);
+  const loginKey = 'wechat-review-entry';
+  assertLoginAllowed(ip, loginKey);
+  const code = text(req.body && req.body.code, 128);
+  if (!code || !safeEqual(hashPassword(code), config.reviewEntryCodeHash())) {
+    recordLoginFailure(ip, loginKey);
+    throw httpError(401, 'REVIEW_CODE_INVALID', '审核码不正确');
+  }
+  recordLoginSuccess(ip, loginKey);
+  const person = await resetReviewEntry(store);
+  const session = await createSession(store, person.id, 'employee', config.reviewEntryCodeHash());
+  res.json({
+    token: session.token,
+    role: 'employee',
+    employee: toSelf(person),
+    returning: true,
+    reviewEntry: true,
+  });
 }));
 
 app.post('/api/login', asyncRoute(async (req, res) => {
@@ -589,9 +639,9 @@ app.get('/api/templates', asyncRoute(async (req, res) => {
   requireAdmin(req);
   const root = await store.getCompany('default');
   const admin = adminOf(req);
-  const items = visibleTemplates(root, admin).map((item) => admin.scope === 'company'
+  const items = visibleTemplates(root, admin).map((item) => publicTemplate(admin.scope === 'company'
     ? { ...item, companyIds: [admin.companyId] }
-    : item);
+    : item));
   res.json({ items });
 }));
 
@@ -600,7 +650,7 @@ app.post('/api/templates', asyncRoute(async (req, res) => {
   if (adminOf(req).scope !== 'hq') throw httpError(403, 'FORBIDDEN', '只有总部管理员可以创建模板');
   const root = await store.getCompany('default');
   const row = createTemplate(req.body || {}, root);
-  const companyIds = new Set((await store.listCompanies()).map((item) => item.id));
+  const companyIds = new Set((await store.listCompanies()).filter((item) => !isReviewEntryCompany(item)).map((item) => item.id));
   if (row.companyIds.some((id) => !companyIds.has(id))) {
     throw httpError(400, 'VALIDATION_ERROR', '分配的企业不存在');
   }
@@ -615,20 +665,23 @@ app.put('/api/templates/:id', asyncRoute(async (req, res) => {
   const root = await store.getCompany('default');
   const original = allTemplates(root).find((item) => item.id === req.params.id);
   if (!original) throw httpError(404, 'NOT_FOUND', '模板不存在');
-  const requestedCompanyIds = Array.isArray(req.body && req.body.companyIds)
+  const requestedPublicCompanyIds = Array.isArray(req.body && req.body.companyIds)
     ? req.body.companyIds.map((id) => text(id, 40)).filter(Boolean)
-    : original.companyIds;
-  const companyIds = new Set((await store.listCompanies()).map((item) => item.id));
-  if (requestedCompanyIds.some((id) => !companyIds.has(id))) {
+    : publicTemplate(original).companyIds;
+  const companyIds = new Set((await store.listCompanies()).filter((item) => !isReviewEntryCompany(item)).map((item) => item.id));
+  if (requestedPublicCompanyIds.some((id) => !companyIds.has(id))) {
     throw httpError(400, 'VALIDATION_ERROR', '分配的企业不存在');
   }
+  const requestedCompanyIds = original.builtIn && original.companyIds.includes(REVIEW_COMPANY_ID)
+    ? requestedPublicCompanyIds.concat(REVIEW_COMPANY_ID)
+    : requestedPublicCompanyIds;
   const builtInRoot = setBuiltInAssignments(root, original.id, requestedCompanyIds);
   if (builtInRoot) {
     await store.saveCompanyRecord('default', builtInRoot);
-    res.json({ template: allTemplates(builtInRoot).find((item) => item.id === original.id) });
+    res.json({ template: publicTemplate(allTemplates(builtInRoot).find((item) => item.id === original.id)) });
     return;
   }
-  const row = { ...createTemplate(req.body || {}, root), id: original.id, companyIds: requestedCompanyIds };
+  const row = { ...createTemplate(req.body || {}, root), id: original.id, companyIds: requestedPublicCompanyIds };
   await store.saveCompanyRecord('default', {
     ...root,
     cardTemplates: listTemplates(root).map((item) => item.id === row.id ? row : item),
@@ -647,6 +700,7 @@ app.get('/api/employees', asyncRoute(async (req, res) => {
   const admin = adminOf(req);
   const people = await store.listPeople({ kind: 'employee' });
   const items = people
+    .filter((person) => !isReviewEntryPerson(person))
     .map((person) => viewForAdmin(person, admin))
     .filter((person) => person && matchesQuery(person, q))
     .map(toSelf);
@@ -973,7 +1027,7 @@ app.get('/api/account-permissions', asyncRoute(async (req, res) => {
   const root = await store.getCompany('default');
   const people = await store.listPeople({ kind: 'employee' });
   const q = String(req.query.q || '').trim();
-  const items = people.filter((person) => permissionAccountVisible(person, admin))
+  const items = people.filter((person) => !isReviewEntryPerson(person) && permissionAccountVisible(person, admin))
     .map((person) => permissionAccount(person, admin, root))
     .filter((person) => !q || (person.name || '').includes(q) || person.phone.includes(q));
   res.json({ items });
@@ -1040,6 +1094,7 @@ app.get('/api/employee/me', asyncRoute(async (req, res) => {
     templateCompany: company ? publicCompany(companyForTemplate(company, root, employee.cardTemplate)) : null,
     cardCompanies,
     permission,
+    reviewEntry: isReviewEntryPerson(user),
     canEdit: employee.cards.some((card) => card.id === employee.activeCardId && card.canEdit),
   });
 }));
@@ -1048,7 +1103,8 @@ app.get('/api/employee/templates', asyncRoute(async (req, res) => {
   const user = requireEmployee(req);
   const root = await store.getCompany('default');
   const permission = effectivePermission(user, root);
-  const companies = (await managedCompanies()).filter((company) => canManageCompany(permission, company.id));
+  const companies = (await managedCompanies({ includeReviewEntry: isReviewEntryPerson(user) }))
+    .filter((company) => canManageCompany(permission, company.id));
   const items = [];
   for (const template of allTemplates(root)) {
     for (const company of companies) {
@@ -1083,7 +1139,8 @@ app.post('/api/employee/cards', asyncRoute(async (req, res) => {
   }
 
   const company = await store.getCompany(companyId);
-  if (!reviewCompanyVisible(company)) throw httpError(404, 'NOT_FOUND', '公司不存在');
+  const reviewAllowed = isReviewEntryPerson(user) && isReviewEntryCompany(company);
+  if (!reviewCompanyVisible(company) && !reviewAllowed) throw httpError(404, 'NOT_FOUND', '公司不存在');
   const cardOptions = {
     companyId,
     company: company.name,
@@ -1270,7 +1327,7 @@ app.get('/api/analytics/summary', asyncRoute(async (req, res) => {
   } else {
     requireAdmin(req);
     const scope = await visibleCompanyScope(adminOf(req));
-    people = await store.listPeople({ kind: 'employee' });
+    people = (await store.listPeople({ kind: 'employee' })).filter((person) => !isReviewEntryPerson(person));
     if (scope) {
       const allowed = new Set(scope.personIds);
       people = people.filter((person) => allowed.has(person.id));
@@ -1305,6 +1362,12 @@ app.get('/api/analytics/list', asyncRoute(async (req, res) => {
       if (cardId && !scope.personIds.includes(cardId)) throw httpError(403, 'FORBIDDEN', '只能查看本公司的名片数据');
       if (!cardId) req.companyCardIds = scope.personIds;
       req.companyShareCardIds = scope.cardIds;
+    } else {
+      const visiblePeople = (await store.listPeople({ kind: 'employee' }))
+        .filter((person) => !isReviewEntryPerson(person));
+      const allowed = new Set(visiblePeople.map((person) => person.id));
+      if (cardId === REVIEW_PERSON_ID) throw httpError(404, 'NOT_FOUND', '名片不存在');
+      if (!cardId) req.companyCardIds = [...allowed];
     }
   }
   const { page, limit, offset } = parsePage(req.query);
@@ -1350,6 +1413,7 @@ app.get('/api/analytics/visitors', asyncRoute(async (req, res) => {
   } else {
     requireAdmin(req);
     if (!cardId) throw httpError(400, 'VALIDATION_ERROR', '请指定名片');
+    if (cardId === REVIEW_PERSON_ID) throw httpError(404, 'NOT_FOUND', '名片不存在');
     const scope = await visibleCompanyScope(adminOf(req));
     if (scope && !scope.personIds.includes(cardId)) throw httpError(403, 'FORBIDDEN', '只能查看本公司的名片数据');
     req.companyShareCardIds = scope ? scope.cardIds : undefined;

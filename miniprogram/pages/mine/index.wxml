@@ -4,7 +4,7 @@
   <view class="mine-body">
     <view class="error" wx:if="{{error}}">{{error}}</view>
     <view class="group">
-      <view class="row" bindtap="onPhone">
+      <view class="row" wx:if="{{!reviewEntry}}" bindtap="onPhone">
         <image class="ico" src="/assets/icons/switch-account.png" mode="aspectFit"></image>
         <text class="name">手机账号</text>
         <text class="value">{{phoneText || '未绑定'}}</text>
@@ -15,7 +15,12 @@
         <text class="name">名片权限</text>
         <text class="value">{{permissionText}}</text>
       </view>
-      <view class="row" bindtap="onClose">
+      <view class="row" wx:if="{{reviewEntry}}">
+        <image class="ico" src="/assets/icons/switch-account.png" mode="aspectFit"></image>
+        <text class="name">账号类型</text>
+        <text class="value">微信审核体验</text>
+      </view>
+      <view class="row" wx:if="{{!reviewEntry}}" bindtap="onClose">
         <image class="ico" src="/assets/icons/logout.png" mode="aspectFit"></image>
         <text class="name">注销账号</text>
         <image class="chev" src="/assets/icons/arrow-right.png" mode="aspectFit"></image>

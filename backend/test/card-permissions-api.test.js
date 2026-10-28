@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
@@ -12,6 +13,8 @@ process.env.SKIP_WECHAT_AUTH = 'true';
 process.env.ADMIN_USER = 'admin';
 process.env.ADMIN_PASS = 'admin123';
 process.env.REVIEW_TEST_MODE = 'true'; // Retired flag must not create a bypass.
+process.env.WECHAT_REVIEW_ENTRY_ENABLED = 'false';
+delete process.env.WECHAT_REVIEW_CODE_HASH;
 process.env.MINIPROGRAM_DEFAULT_CARD_PERMISSION_ENABLED = 'false';
 delete process.env.DATABASE_URL;
 
@@ -53,6 +56,101 @@ test('default policy is hidden and disabled; retired review mode cannot create a
   assert.equal((await api('/api/card-permission-policy', { method: 'PUT', token, body: { level: 3 } })).status, 403);
   assert.equal((await api('/api/companies', { token })).json.items.some((item) => item.reviewOnly), false);
   assert.equal((await api('/api/login', { method: 'POST', body: { username: '123csmp', password: '123csmp' } })).status, 401);
+});
+
+test('review entry is isolated, resettable and revoked as soon as its flag is disabled', async () => {
+  const hq = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
+  const disabledOptions = await api('/api/auth/options');
+  assert.equal(disabledOptions.json.reviewEntryEnabled, false);
+  assert.equal((await api('/api/auth/review-login', {
+    method: 'POST', body: { code: 'review-demo-code' },
+  })).status, 404);
+
+  process.env.WECHAT_REVIEW_ENTRY_ENABLED = 'true';
+  process.env.WECHAT_REVIEW_CODE_HASH = crypto.createHash('sha256').update('review-demo-code').digest('hex');
+  try {
+    const options = await api('/api/auth/options');
+    assert.equal(options.json.reviewEntryEnabled, true);
+    assert.equal((await api('/api/auth/review-login', {
+      method: 'POST', body: { code: 'wrong-code' },
+    })).status, 401);
+
+    const login = await api('/api/auth/review-login', {
+      method: 'POST', body: { code: 'review-demo-code' },
+    });
+    assert.equal(login.status, 200);
+    assert.equal(login.json.reviewEntry, true);
+    assert.equal(login.json.employee.name, '审核体验员工');
+    assert.equal(login.json.employee.cards.length, 1);
+    assert.equal(login.json.employee.cards[0].template, 'classic');
+    const reviewToken = login.json.token;
+    const reviewPersonId = login.json.employee.id;
+    const initialCardId = login.json.employee.cards[0].id;
+
+    const me = await api('/api/employee/me', { token: reviewToken });
+    assert.equal(me.status, 200);
+    assert.equal(me.json.reviewEntry, true);
+    assert.equal(me.json.permission.level, 2);
+    assert.deepEqual(me.json.permission.companyIds, ['wechat-review-demo']);
+    assert.equal((await api('/api/account/phones', { token: reviewToken })).status, 403);
+    assert.equal((await api('/api/account/close', {
+      method: 'POST', token: reviewToken, body: {},
+    })).status, 403);
+
+    const shared = await api('/api/cards/' + reviewPersonId + '?shareCard=' + initialCardId);
+    assert.equal(shared.status, 200);
+    assert.equal(shared.json.card.activeCardId, initialCardId);
+
+    const templates = await api('/api/employee/templates', { token: reviewToken });
+    assert.equal(templates.status, 200);
+    assert.deepEqual(templates.json.items.map((item) => item.id).sort(), ['classic', 'horizon', 'wave']);
+    assert.ok(templates.json.items.every((item) => item.companyId === 'wechat-review-demo'));
+
+    const created = await api('/api/employee/cards', {
+      method: 'POST', token: reviewToken,
+      body: { template: 'horizon', companyId: 'wechat-review-demo' },
+    });
+    assert.equal(created.status, 201);
+    assert.equal(created.json.employee.cards.length, 2);
+
+    const viewed = await api('/api/analytics/view', {
+      method: 'POST', body: {
+        cardId: reviewPersonId, shareCard: initialCardId, visitorId: 'review-visitor',
+      },
+    });
+    assert.equal(viewed.status, 201);
+
+    const companies = await api('/api/companies', { token: hq.json.token });
+    assert.equal(companies.json.items.some((item) => item.id === 'wechat-review-demo'), false);
+    const adminTemplates = await api('/api/templates', { token: hq.json.token });
+    assert.equal(adminTemplates.json.items.some((item) => item.companyIds.includes('wechat-review-demo')), false);
+    const employees = await api('/api/employees', { token: hq.json.token });
+    assert.equal(employees.json.items.some((item) => item.id === reviewPersonId), false);
+    const permissionAccounts = await api('/api/account-permissions', { token: hq.json.token });
+    assert.equal(permissionAccounts.json.items.some((item) => item.id === reviewPersonId), false);
+    const analytics = await api('/api/analytics/list', { token: hq.json.token });
+    assert.equal(analytics.json.items.some((item) => item.cardId === reviewPersonId), false);
+    const summary = await api('/api/analytics/summary', { token: hq.json.token });
+    assert.equal(summary.json.items.some((item) => item.cardId === reviewPersonId), false);
+    assert.equal((await api('/api/analytics/visitors?cardId=' + reviewPersonId, {
+      token: hq.json.token,
+    })).status, 404);
+
+    const resetLogin = await api('/api/auth/review-login', {
+      method: 'POST', body: { code: 'review-demo-code' },
+    });
+    assert.equal(resetLogin.status, 200);
+    assert.equal(resetLogin.json.employee.cards.length, 1);
+    assert.equal(resetLogin.json.employee.cards[0].template, 'classic');
+    assert.equal((await api('/api/employee/me', { token: reviewToken })).status, 401);
+
+    process.env.WECHAT_REVIEW_ENTRY_ENABLED = 'false';
+    assert.equal((await api('/api/employee/me', { token: resetLogin.json.token })).status, 401);
+    assert.equal((await api('/api/auth/options')).json.reviewEntryEnabled, false);
+  } finally {
+    process.env.WECHAT_REVIEW_ENTRY_ENABLED = 'false';
+    delete process.env.WECHAT_REVIEW_CODE_HASH;
+  }
 });
 
 test('policy applies to registered, manually created and imported accounts and explicit ordinary overrides it', async () => {

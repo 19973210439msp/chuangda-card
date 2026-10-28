@@ -10,13 +10,19 @@ const { changePhone, closeAccount, listLinkedAccounts, switchLinkedAccount } = r
 
 const router = express.Router();
 
-router.get('/phones', asyncRoute(async (req, res) => {
+function requireRegularEmployee(req) {
   const user = requireEmployee(req);
+  if (user.reviewEntry) throw httpError(403, 'REVIEW_ACCOUNT_RESTRICTED', '审核体验账号不能修改登录账号');
+  return user;
+}
+
+router.get('/phones', asyncRoute(async (req, res) => {
+  const user = requireRegularEmployee(req);
   res.json({ items: await listLinkedAccounts(getStore(), user) });
 }));
 
 router.post('/switch', asyncRoute(async (req, res) => {
-  const user = requireEmployee(req);
+  const user = requireRegularEmployee(req);
   const personId = text(req.body && req.body.personId, 64);
   if (!personId) throw httpError(400, 'VALIDATION_ERROR', '请选择要切换的账号');
   const saved = await switchLinkedAccount(getStore(), user, personId, req.auth && req.auth.token);
@@ -24,7 +30,7 @@ router.post('/switch', asyncRoute(async (req, res) => {
 }));
 
 router.post('/phone/code', asyncRoute(async (req, res) => {
-  const user = requireEmployee(req);
+  const user = requireRegularEmployee(req);
   const phone = normalizePhone(req.body && req.body.phone);
   assertMobile(phone);
   if (phone === user.phone) throw httpError(400, 'VALIDATION_ERROR', '与当前手机号相同');
@@ -44,7 +50,7 @@ router.post('/phone/code', asyncRoute(async (req, res) => {
 }));
 
 router.put('/phone', asyncRoute(async (req, res) => {
-  const user = requireEmployee(req);
+  const user = requireRegularEmployee(req);
   const store = getStore();
   const saved = await changePhone(store, user, req.body || {}, req.auth && req.auth.token);
   res.json({
@@ -55,7 +61,7 @@ router.put('/phone', asyncRoute(async (req, res) => {
 }));
 
 router.post('/close', asyncRoute(async (req, res) => {
-  const user = requireEmployee(req);
+  const user = requireRegularEmployee(req);
   const store = getStore();
   await closeAccount(store, user);
   res.json({ ok: true, status: 'closed' });

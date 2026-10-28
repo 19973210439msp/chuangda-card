@@ -8,6 +8,7 @@ const { phoneFromWechatCode } = require('./wechat');
 const { writeActive, assignCardCompany, ensureCards, activeCard } = require('./cards');
 const { effectivePermission, assertManageCompany } = require('./cardPermissions');
 const { templateGrantedTo, allTemplates } = require('./templates');
+const { isReviewEntryCompany, isReviewEntryPerson } = require('./reviewEntry');
 const {
   text,
   normalizePhone,
@@ -74,7 +75,8 @@ async function saveSelfCard(store, person, body) {
   if (body.companyId !== undefined) {
     const wanted = String(body.companyId || '');
     const company = await store.getCompany(wanted);
-    if (!company || company.reviewOnly) throw httpError(404, 'NOT_FOUND', '企业不存在');
+    const reviewAllowed = isReviewEntryPerson(person) && isReviewEntryCompany(company);
+    if (!company || (company.reviewOnly && !reviewAllowed)) throw httpError(404, 'NOT_FOUND', '企业不存在');
     const assigned = assignCardCompany(synced, synced.activeCardId, wanted, company.name || '');
     if (assigned) synced = assigned;
   }

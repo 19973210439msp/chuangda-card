@@ -22,6 +22,15 @@ function wechatSkipAllowed() {
   return process.env.SKIP_WECHAT_AUTH === 'true' && process.env.NODE_ENV !== 'production';
 }
 
+function reviewEntryCodeHash() {
+  const value = (process.env.WECHAT_REVIEW_CODE_HASH || '').trim().toLowerCase();
+  return /^[a-f0-9]{64}$/.test(value) ? value : '';
+}
+
+function reviewEntryEnabled() {
+  return process.env.WECHAT_REVIEW_ENTRY_ENABLED === 'true' && !!reviewEntryCodeHash();
+}
+
 
 function missingPgOssConfig() {
   const missing = [];
@@ -53,6 +62,8 @@ module.exports = {
   dataFile,
   uploadDir,
   wechatSkipAllowed,
+  reviewEntryCodeHash,
+  reviewEntryEnabled,
   missingPgOssConfig,
   assertPgOssConfig,
   publicBase,

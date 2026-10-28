@@ -5,7 +5,15 @@ const { phoneAuthError, phoneCodeFromEvent } = require('../../utils/phone-auth')
 const { favoritePayload, sharedCardPath } = require('../../utils/favorite-flow');
 
 Page({
-  data: { wechatSkip: true, loading: false, error: '', scrollHeight: 600 },
+  data: {
+    wechatSkip: true,
+    reviewEntryEnabled: false,
+    reviewOpen: false,
+    reviewCode: '',
+    loading: false,
+    error: '',
+    scrollHeight: 600,
+  },
   onLoad() {
     this.setData({ scrollHeight: pageScrollHeight() });
   },
@@ -25,7 +33,10 @@ Page({
     request({ url: '/api/auth/options', redirectOnAuth: false })
       .then((data) => {
         // 即使测试可跳过，也不再自动进入；优先走微信授权手机号，避免落到短信绑号页
-        this.setData({ wechatSkip: !!data.wechatSkip });
+        this.setData({
+          wechatSkip: !!data.wechatSkip,
+          reviewEntryEnabled: !!data.reviewEntryEnabled,
+        });
         this.checking = false;
       })
       .catch(() => {
@@ -87,6 +98,36 @@ Page({
       wx.setStorageSync('devOpenId', dev);
     }
     this.loginWith((done) => done('dev:' + dev));
+  },
+  onReviewToggle() {
+    this.setData({
+      reviewOpen: !this.data.reviewOpen,
+      reviewCode: '',
+      error: '',
+    });
+  },
+  onReviewCodeInput(event) {
+    this.setData({ reviewCode: event.detail.value || '' });
+  },
+  onReviewLogin() {
+    const code = String(this.data.reviewCode || '').trim();
+    if (!code) {
+      this.setData({ error: '请输入审核码' });
+      return;
+    }
+    this.setData({ loading: true, error: '' });
+    request({
+      url: '/api/auth/review-login',
+      method: 'POST',
+      data: { code },
+      redirectOnAuth: false,
+    }).then((data) => {
+      wx.setStorageSync('token', data.token);
+      if (data.employee) accounts.remember(data.employee);
+      this.finishLogin();
+    }).catch((err) => {
+      this.setData({ error: err.message || '审核体验登录失败', loading: false });
+    });
   },
   loginWith(getCode) {
     this.setData({ loading: true, error: '' });

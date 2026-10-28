@@ -8,6 +8,7 @@ Page({
     employee: null,
     phoneText: '',
     permissionText: '一级 · 普通名片权限',
+    reviewEntry: false,
     error: '',
     scrollHeight: 600,
   },
@@ -24,6 +25,7 @@ Page({
         employee,
         phoneText: accounts.maskPhone(employee.authPhone || employee.phone),
         permissionText: level === 3 ? '三级 · 全企业名片权限' : level === 2 ? '二级 · 指定企业名片权限' : '一级 · 普通名片权限',
+        reviewEntry: !!data.reviewEntry,
         error: '',
       });
     }).catch((err) => this.setData({ error: err.message }));

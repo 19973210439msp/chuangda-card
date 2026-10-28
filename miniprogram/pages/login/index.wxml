@@ -16,7 +16,16 @@
     <text class="login-desc">授权微信手机号，用于匹配您的员工名片</text>
     <view class="error" wx:if="{{error}}">{{error}}</view>
     <button class="login-primary" open-type="getPhoneNumber" bindgetphonenumber="onWechatPhone" loading="{{loading}}" disabled="{{loading}}">微信授权手机号登录</button>
-    <text class="login-hint">首次登录将自动匹配或创建名片</text>
+    <text class="login-hint">授权后将匹配管理员分配的员工名片</text>
+  </view>
+
+  <view class="review-entry" wx:if="{{reviewEntryEnabled}}">
+    <button class="review-toggle" bindtap="onReviewToggle" disabled="{{loading}}">微信审核体验</button>
+    <view class="review-panel" wx:if="{{reviewOpen}}">
+      <text class="review-desc">审核人员可使用审核码进入隔离的演示账号，体验创建、编辑、切换和分享名片。</text>
+      <input class="review-input" password placeholder="请输入审核码" value="{{reviewCode}}" bindinput="onReviewCodeInput" disabled="{{loading}}"></input>
+      <button class="review-submit" bindtap="onReviewLogin" loading="{{loading}}" disabled="{{loading}}">进入审核体验</button>
+    </view>
   </view>
 
   <view class="dev-entry" wx:if="{{wechatSkip}}">
