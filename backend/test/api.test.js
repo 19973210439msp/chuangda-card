@@ -689,6 +689,42 @@ test('analytics summary counts every view and list paginates', async () => {
   assert.equal(page3.json.items.length, 1);
 });
 
+test('analytics date filters use Beijing calendar-day boundaries', async () => {
+  const admin = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
+  const created = await api('/api/employees', {
+    method: 'POST',
+    token: admin.json.token,
+    body: { employeeNo: '3102', name: '时区测试员工', phone: '13800003102', title: '测试' },
+  });
+  assert.equal(created.status, 201);
+  const cardId = created.json.employee.id;
+  const rows = [
+    ['view-before-beijing-day', '2026-10-27T15:59:59.000Z'],
+    ['view-at-beijing-day-start', '2026-10-27T16:00:00.000Z'],
+    ['view-at-beijing-day-end', '2026-10-28T15:59:59.000Z'],
+    ['view-after-beijing-day', '2026-10-28T16:00:00.000Z'],
+  ];
+  for (const [id, startedAt] of rows) {
+    await getStore().insertView({ id, cardId, shareCardId: created.json.employee.activeCardId, startedAt, durationSec: 0 });
+  }
+
+  const list = await api(
+    '/api/analytics/list?cardId=' + encodeURIComponent(cardId) + '&from=2026-10-28&to=2026-10-28',
+    { token: admin.json.token }
+  );
+  assert.equal(list.status, 200);
+  assert.deepEqual(list.json.items.map((item) => item.id).sort(), [
+    'view-at-beijing-day-end',
+    'view-at-beijing-day-start',
+  ]);
+  const summary = await api(
+    '/api/analytics/summary?cardId=' + encodeURIComponent(cardId) + '&from=2026-10-28&to=2026-10-28',
+    { token: admin.json.token }
+  );
+  assert.equal(summary.status, 200);
+  assert.equal(summary.json.items[0].views, 2);
+});
+
 test('admin login locks after repeated failures', async () => {
   for (let i = 0; i < 5; i += 1) {
     const failed = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'wrong-pass' } });

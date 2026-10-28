@@ -69,6 +69,15 @@ function esc(value) {
     .replace(/"/g, '&quot;');
 }
 
+function formatBeijingTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const beijing = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+  const pad = (part) => String(part).padStart(2, '0');
+  return beijing.getUTCFullYear() + '-' + pad(beijing.getUTCMonth() + 1) + '-' + pad(beijing.getUTCDate())
+    + ' ' + pad(beijing.getUTCHours()) + ':' + pad(beijing.getUTCMinutes());
+}
+
 function statusLabel(status) {
   if (status === 'closed') return '已注销';
   if (status === 'disabled') return '已停用';
@@ -608,7 +617,7 @@ function visitsHtml() {
     <tr>
       <td><strong>${esc(viewerName)}</strong><br><span class="muted">${esc(viewerDetail)}</span></td>
       <td><strong>${esc(cardName)}</strong><br><span class="muted">${esc(cardDetail)}</span></td>
-      <td>${esc(String(item.startedAt || '').replace('T', ' ').slice(0, 16))}</td>
+      <td>${esc(formatBeijingTime(item.startedAt))}</td>
       <td>${item.durationSec} 秒</td>
     </tr>`;
   }).join('');

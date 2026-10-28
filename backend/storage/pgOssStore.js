@@ -487,11 +487,11 @@ const store = {
     }
     if (from) {
       params.push(from);
-      where.push('started_at >= $' + params.length + '::date');
+      where.push('started_at >= $' + params.length + '::timestamptz');
     }
     if (to) {
       params.push(to);
-      where.push('started_at < ($' + params.length + '::date + interval \'1 day\')');
+      where.push('started_at < $' + params.length + '::timestamptz');
     }
     const sql = `
       SELECT
@@ -526,11 +526,11 @@ const store = {
     }
     if (from) {
       params.push(from);
-      where.push('started_at >= $' + params.length + '::date');
+      where.push('started_at >= $' + params.length + '::timestamptz');
     }
     if (to) {
       params.push(to);
-      where.push('started_at < ($' + params.length + '::date + interval \'1 day\')');
+      where.push('started_at < $' + params.length + '::timestamptz');
     }
     const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
     const countResult = await query('SELECT COUNT(*)::int AS total FROM views ' + whereSql, params);

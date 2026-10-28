@@ -276,9 +276,9 @@ const store = {
     for (const view of data.views) {
       if (allow && !allow.has(view.cardId)) continue;
       if (shareAllow && !shareAllow.has(view.shareCardId)) continue;
-      const day = String(view.startedAt || '').slice(0, 10);
-      if (from && day < from) continue;
-      if (to && day > to) continue;
+      const startedAt = String(view.startedAt || '');
+      if (from && startedAt < from) continue;
+      if (to && startedAt >= to) continue;
       let group = groups.get(view.cardId);
       if (!group) {
         group = { cardId: view.cardId, views: 0, visitors: new Set(), totalDuration: 0, exchanges: 0 };
@@ -306,9 +306,9 @@ const store = {
         if (cardId && view.cardId !== cardId) return false;
         if (allow && !allow.has(view.cardId)) return false;
         if (shareAllow && !shareAllow.has(view.shareCardId)) return false;
-        const day = String(view.startedAt || '').slice(0, 10);
-        if (from && day < from) return false;
-        if (to && day > to) return false;
+        const startedAt = String(view.startedAt || '');
+        if (from && startedAt < from) return false;
+        if (to && startedAt >= to) return false;
         return true;
       })
       .sort((a, b) => String(b.startedAt || '').localeCompare(String(a.startedAt || '')));

@@ -136,6 +136,32 @@ test('success notice expires and clears when switching pages', async () => {
   assert.equal(timer, null);
 });
 
+test('visit start time is rendered in Beijing time', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../admin-web/js/app.js'), 'utf8');
+  const page = { innerHTML: '', querySelector: () => null };
+  const context = vm.createContext({
+    document: { querySelector: (selector) => selector === '#app' ? page : null, addEventListener: () => {} },
+    window: { addEventListener: () => {} },
+    location: { hash: '#/visits' },
+    token: () => '',
+  });
+  vm.runInContext(source, context);
+  const html = vm.runInContext(`
+    state.admin = { scope: 'hq' };
+    state.employees = [];
+    state.visits = [{
+      id: 'view-1', cardId: 'person-1', cardName: '测试名片', name: '游客访问',
+      startedAt: '2026-10-28T06:13:00.000Z', durationSec: 3,
+    }];
+    state.visitTotal = 1;
+    state.visitPage = 1;
+    state.visitLimit = 50;
+    visitsHtml();
+  `, context);
+  assert.match(html, /2026-10-28 14:13/);
+  assert.doesNotMatch(html, /2026-10-28 06:13/);
+});
+
 test('hq employee creation and import include a target company selector', () => {
   const source = fs.readFileSync(path.join(__dirname, '../../admin-web/js/app.js'), 'utf8');
   const page = { innerHTML: '', querySelector: () => null };

@@ -172,6 +172,19 @@ function parsePage(query) {
   return { page, limit, offset: (page - 1) * limit };
 }
 
+function beijingDateBoundary(value, nextDay) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+  if (!match) return undefined;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) {
+    return undefined;
+  }
+  return new Date(Date.UTC(year, month - 1, day + (nextDay ? 1 : 0)) - 8 * 60 * 60 * 1000).toISOString();
+}
+
 function applyAdminFields(existing, body) {
   const next = { ...existing };
   if (body.name !== undefined) next.name = text(body.name, 40);
@@ -1373,8 +1386,8 @@ app.get('/api/analytics/summary', asyncRoute(async (req, res) => {
     }
     if (req.query.cardId) people = people.filter((person) => person.id === req.query.cardId);
   }
-  const from = text(req.query.from, 10);
-  const to = text(req.query.to, 10);
+  const from = beijingDateBoundary(text(req.query.from, 10), false);
+  const to = beijingDateBoundary(text(req.query.to, 10), true);
   const statsRows = await store.summarizeViews({
     cardIds: people.map((person) => person.id),
     shareCardIds,
@@ -1411,8 +1424,8 @@ app.get('/api/analytics/list', asyncRoute(async (req, res) => {
     }
   }
   const { page, limit, offset } = parsePage(req.query);
-  const from = text(req.query.from, 10);
-  const to = text(req.query.to, 10);
+  const from = beijingDateBoundary(text(req.query.from, 10), false);
+  const to = beijingDateBoundary(text(req.query.to, 10), true);
   const pageResult = await store.listViewsPage({
     cardId: cardId || undefined,
     cardIds: req.companyCardIds,
