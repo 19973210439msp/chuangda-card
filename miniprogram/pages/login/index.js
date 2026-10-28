@@ -10,6 +10,7 @@ Page({
     reviewEntryEnabled: false,
     reviewOpen: false,
     reviewCode: '',
+    reviewCodeReady: false,
     loading: false,
     error: '',
     scrollHeight: 600,
@@ -31,24 +32,40 @@ Page({
       wx.removeStorageSync('loginNotice');
       this.setData({ error: notice });
     }
-    if (wx.getStorageSync('token')) {
+    const token = wx.getStorageSync('token');
+    const reviewSession = !!wx.getStorageSync('reviewEntrySession');
+    if (token && !reviewSession) {
       this.finishLogin();
       return;
     }
-    this.tryResume();
     if (this.checking) return;
     this.checking = true;
-    request({ url: '/api/auth/options', redirectOnAuth: false })
+    request({ url: '/api/auth/options', redirectOnAuth: false, auth: false })
       .then((data) => {
+        const reviewEntryEnabled = !!data.reviewEntryEnabled;
         // 即使测试可跳过，也不再自动进入；优先走微信授权手机号，避免落到短信绑号页
         this.setData({
           wechatSkip: !!data.wechatSkip,
-          reviewEntryEnabled: !!data.reviewEntryEnabled,
+          reviewEntryEnabled,
         });
         this.checking = false;
+        if (token && reviewSession && reviewEntryEnabled) {
+          this.finishLogin();
+          return;
+        }
+        if (reviewSession && !reviewEntryEnabled) {
+          wx.removeStorageSync('token');
+          wx.removeStorageSync('reviewEntrySession');
+        }
+        this.tryResume();
       })
       .catch(() => {
         this.checking = false;
+        if (token && reviewSession) {
+          this.finishLogin();
+          return;
+        }
+        this.tryResume();
       });
   },
   tryResume() {
@@ -71,6 +88,7 @@ Page({
             return;
           }
           wx.setStorageSync('token', data.token);
+          wx.removeStorageSync('reviewEntrySession');
           if (data.employee) accounts.remember(data.employee);
           this.finishLogin();
         }).catch(() => {
@@ -111,13 +129,20 @@ Page({
     this.setData({
       reviewOpen: !this.data.reviewOpen,
       reviewCode: '',
+      reviewCodeReady: false,
       error: '',
     });
   },
   onReviewCodeInput(event) {
-    this.setData({ reviewCode: event.detail.value || '' });
+    const reviewCode = event.detail.value || '';
+    this.setData({
+      reviewCode,
+      reviewCodeReady: !!String(reviewCode).trim(),
+      error: '',
+    });
   },
   onReviewLogin() {
+    if (this.data.loading) return;
     const code = String(this.data.reviewCode || '').trim();
     if (!code) {
       this.setData({ error: '请输入审核码' });
@@ -131,7 +156,7 @@ Page({
       redirectOnAuth: false,
     }).then((data) => {
       wx.setStorageSync('token', data.token);
-      if (data.employee) accounts.remember(data.employee);
+      wx.setStorageSync('reviewEntrySession', true);
       this.finishLogin();
     }).catch((err) => {
       this.setData({ error: err.message || '审核体验登录失败', loading: false });
@@ -154,6 +179,7 @@ Page({
         redirectOnAuth: false,
       }).then((data) => {
         wx.setStorageSync('token', data.token);
+        wx.removeStorageSync('reviewEntrySession');
         if (data.employee) accounts.remember(data.employee);
         if (data.claimed || data.matchedImport) {
           wx.showToast({

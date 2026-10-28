@@ -33,7 +33,34 @@ Page({
   onPhone() {
     wx.navigateTo({ url: '/pages/mine/phone' });
   },
+  onSwitchAccount() {
+    wx.showModal({
+      title: '切换账号',
+      content: '将退出微信审核体验并返回登录页，之后可使用微信授权手机号登录个人账号。',
+      confirmText: '切换',
+      success: (res) => {
+        if (!res.confirm) return;
+        const finish = () => {
+          wx.removeStorageSync('token');
+          wx.removeStorageSync('reviewEntrySession');
+          wx.reLaunch({ url: '/pages/login/index' });
+        };
+        request({ url: '/api/auth/logout', method: 'POST', data: {}, redirectOnAuth: false })
+          .then(finish)
+          .catch(finish);
+      },
+    });
+  },
   onClose() {
+    if (this.data.reviewEntry) {
+      wx.showModal({
+        title: '无法注销',
+        content: '微信审核体验账号不允许注销，请使用“切换账号”退出审核体验。',
+        showCancel: false,
+        confirmText: '我知道了',
+      });
+      return;
+    }
     wx.showModal({
       title: '注销账号',
       content: '注销后客户无法打开你的名片，名片夹也不再列出。名片正文、浏览记录和收藏引用会保留，管理员可以恢复。',
@@ -43,6 +70,7 @@ Page({
         if (!res.confirm) return;
         request({ url: '/api/account/close', method: 'POST', data: {} }).then(() => {
           wx.removeStorageSync('token');
+          wx.removeStorageSync('reviewEntrySession');
           wx.reLaunch({ url: '/pages/login/index' });
         }).catch((err) => this.setData({ error: err.message }));
       },

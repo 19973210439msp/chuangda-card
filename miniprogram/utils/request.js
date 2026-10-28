@@ -30,6 +30,7 @@ function requestOnce(base, { url, method = 'GET', data, redirectOnAuth = true, t
         const code = res.data && res.data.error && res.data.error.code;
         if ((res.statusCode === 401 || code === 'ACCOUNT_INACTIVE') && redirectOnAuth) {
           wx.removeStorageSync('token');
+          wx.removeStorageSync('reviewEntrySession');
           if (code === 'ACCOUNT_INACTIVE') wx.setStorageSync('loginNotice', res.data.error.message);
           wx.reLaunch({ url: '/pages/login/index' });
         }

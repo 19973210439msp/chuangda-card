@@ -20,7 +20,13 @@
         <text class="name">账号类型</text>
         <text class="value">微信审核体验</text>
       </view>
-      <view class="row" wx:if="{{!reviewEntry}}" bindtap="onClose">
+      <view class="row" wx:if="{{reviewEntry}}" bindtap="onSwitchAccount">
+        <image class="ico" src="/assets/icons/switch-account.png" mode="aspectFit"></image>
+        <text class="name">切换账号</text>
+        <text class="value">使用个人账号登录</text>
+        <image class="chev" src="/assets/icons/arrow-right.png" mode="aspectFit"></image>
+      </view>
+      <view class="row" bindtap="onClose">
         <image class="ico" src="/assets/icons/logout.png" mode="aspectFit"></image>
         <text class="name">注销账号</text>
         <image class="chev" src="/assets/icons/arrow-right.png" mode="aspectFit"></image>

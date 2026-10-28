@@ -151,9 +151,18 @@
   line-height: 1.65;
 }
 
+.review-field-label {
+  display: block;
+  margin-top: 24rpx;
+  color: #182850;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
 .review-input {
   height: 80rpx;
-  margin-top: 24rpx;
+  box-sizing: border-box;
+  margin-top: 12rpx;
   padding: 0 24rpx;
   border: 1rpx solid #cbd3df;
   border-radius: 8rpx;
@@ -162,6 +171,24 @@
   font-size: 28rpx;
   line-height: 80rpx;
   text-align: left;
+}
+
+.review-input:focus {
+  border-color: #29477d;
+}
+
+.review-hint {
+  display: block;
+  margin-top: 12rpx;
+  color: #8791a3;
+  font-size: 22rpx;
+  line-height: 1.5;
+}
+
+.review-submit[disabled] {
+  border-color: #aeb7c6;
+  background: #aeb7c6;
+  color: #ffffff;
 }
 
 .login-main .error {
