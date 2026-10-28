@@ -21,6 +21,11 @@ function holderCardPath(cardId, shareCardId) {
   return sharedCardPath(cardId, shareCardId, false) + '&from=holder';
 }
 
+function favoriteCompletion(pageCount, cardId, shareCardId) {
+  if (Number(pageCount) > 1) return { action: 'back', delta: 1 };
+  return { action: 'redirect', url: sharedCardPath(cardId, shareCardId, true) };
+}
+
 const SHARE_SCENES = [1007, 1008, 1036, 1044, 1047, 1048, 1049, 1065, 1167, 1179, 1194];
 
 function sharedEntryPath(enter, pendingCardId) {
@@ -47,4 +52,11 @@ function cardDetailRequest(cardId, shareCardId, from) {
   };
 }
 
-module.exports = { favoritePayload, sharedCardPath, sharedEntryPath, holderCardPath, cardDetailRequest };
+module.exports = {
+  favoritePayload,
+  favoriteCompletion,
+  sharedCardPath,
+  sharedEntryPath,
+  holderCardPath,
+  cardDetailRequest,
+};

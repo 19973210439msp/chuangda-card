@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { sharedEntryPath } = require('../utils/favorite-flow');
+const { favoriteCompletion, sharedEntryPath } = require('../utils/favorite-flow');
 
 test('a collected card hides the favorite action without rendering a saved notice', () => {
   const markup = fs.readFileSync(path.join(__dirname, '../pages/client/card.wxml'), 'utf8');
@@ -40,4 +40,12 @@ test('saving a shared card still stays on the login page', () => {
 test('opening the app normally does not skip login', () => {
   const path = sharedEntryPath({ path: 'pages/login/index', scene: 1001, query: { cardId: 'emp-1' } }, '');
   assert.equal(path, '');
+});
+
+test('favorite completion returns to the original shared card instead of stacking another card page', () => {
+  assert.deepEqual(favoriteCompletion(2, 'emp-1', 'card-9'), { action: 'back', delta: 1 });
+  assert.deepEqual(favoriteCompletion(1, 'emp-1', 'card-9'), {
+    action: 'redirect',
+    url: '/pages/client/card?cardId=emp-1&shareCard=card-9&collected=1',
+  });
 });

@@ -38,6 +38,14 @@ router.get('/', asyncRoute(async (req, res) => {
   res.json({ items: await holderItems(user.id) });
 }));
 
+router.get('/status/:cardId', asyncRoute(async (req, res) => {
+  const user = requireEmployee(req);
+  const cardId = text(req.params.cardId, 64);
+  if (!cardId) throw httpError(400, 'VALIDATION_ERROR', '缺少名片编号');
+  const store = getStore();
+  res.json({ favorited: await store.hasHolderRef(user.id, cardId) });
+}));
+
 function contactKey(card) {
   const phone = normalizePhone(card && card.phone);
   const wechat = String((card && card.wechat) || '').trim();

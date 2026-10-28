@@ -65,7 +65,24 @@ Page({
       this.setData({ favorited: true, canFavorite: false });
       return;
     }
-    this.setData({ favorited: false, canFavorite: true });
+    if (!wx.getStorageSync('token')) {
+      this.setData({ favorited: false, canFavorite: true });
+      return;
+    }
+    this.setData({ favorited: false, canFavorite: false });
+    request({
+      url: '/api/holder/status/' + encodeURIComponent(this.cardId),
+      redirectOnAuth: false,
+    }).then((data) => {
+      const favorited = !!data.favorited;
+      this.setData({ favorited, canFavorite: !favorited });
+    }).catch((err) => {
+      if (err.statusCode === 401 || err.code === 'ACCOUNT_INACTIVE') {
+        wx.removeStorageSync('token');
+        if (err.code === 'ACCOUNT_INACTIVE') wx.setStorageSync('loginNotice', err.message);
+      }
+      this.setData({ favorited: false, canFavorite: true });
+    });
   },
   saveFavorite() {
     request({
@@ -79,7 +96,12 @@ Page({
       this.setData({ favorited: true, canFavorite: false });
       if (!data.already) wx.showToast({ title: '已收入名片夹', icon: 'success' });
     }).catch((err) => {
-      if (err.statusCode === 401 || err.code === 'ACCOUNT_INACTIVE') return;
+      if (err.statusCode === 401 || err.code === 'ACCOUNT_INACTIVE') {
+        wx.removeStorageSync('token');
+        if (err.code === 'ACCOUNT_INACTIVE') wx.setStorageSync('loginNotice', err.message);
+        wx.navigateTo({ url: '/pages/login/index' });
+        return;
+      }
       wx.removeStorageSync('pendingCardId');
       wx.removeStorageSync('pendingShareCard');
       const message = err.message || '';

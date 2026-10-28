@@ -2,7 +2,7 @@ const { request } = require('../../utils/request');
 const { pageScrollHeight } = require('../../utils/util');
 const accounts = require('../../utils/accounts');
 const { phoneAuthError, phoneCodeFromEvent } = require('../../utils/phone-auth');
-const { favoritePayload, sharedCardPath, sharedEntryPath } = require('../../utils/favorite-flow');
+const { favoriteCompletion, favoritePayload, sharedCardPath, sharedEntryPath } = require('../../utils/favorite-flow');
 
 Page({
   data: {
@@ -185,7 +185,13 @@ Page({
     }).then(() => {
       wx.removeStorageSync('pendingCardId');
       wx.removeStorageSync('pendingShareCard');
-      wx.redirectTo({ url: sharedCardPath(pending, share, true) });
+      const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : [];
+      const completion = favoriteCompletion(pages.length, pending, share);
+      if (completion.action === 'back') {
+        wx.navigateBack({ delta: completion.delta });
+        return;
+      }
+      wx.redirectTo({ url: completion.url });
     }).catch((err) => {
       wx.removeStorageSync('pendingCardId');
       wx.removeStorageSync('pendingShareCard');

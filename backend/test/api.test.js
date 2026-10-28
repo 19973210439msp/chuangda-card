@@ -186,11 +186,23 @@ test('employee card, holder, account and analytics', async () => {
   const anonymousFavorite = await api('/api/holder', { method: 'POST', body: { cardId: 'emp-1001' } });
   assert.equal(anonymousFavorite.status, 401);
 
+  const favoriteBefore = await api('/api/holder/status/emp-1001', { token });
+  assert.equal(favoriteBefore.status, 200);
+  assert.equal(favoriteBefore.json.favorited, false);
+
   const favorite = await api('/api/holder', { method: 'POST', token, body: { cardId: 'emp-1001' } });
   assert.equal(favorite.status, 201);
   assert.equal(favorite.json.item.card.name, '林启明');
+  const favoriteAfter = await api('/api/holder/status/emp-1001', { token });
+  assert.equal(favoriteAfter.status, 200);
+  assert.equal(favoriteAfter.json.favorited, true);
   const holder = await api('/api/holder', { token });
   assert.equal(holder.json.items.some((item) => item.cardId === 'emp-1001'), true);
+  assert.equal((await api('/api/holder/emp-1001', { method: 'DELETE', token })).status, 200);
+  const favoriteDeleted = await api('/api/holder/status/emp-1001', { token });
+  assert.equal(favoriteDeleted.status, 200);
+  assert.equal(favoriteDeleted.json.favorited, false);
+  assert.equal((await api('/api/holder', { method: 'POST', token, body: { cardId: 'emp-1001' } })).status, 201);
 
   const confirmed = await api('/api/holder/confirm', {
     method: 'POST',
