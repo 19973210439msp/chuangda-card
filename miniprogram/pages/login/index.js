@@ -43,7 +43,7 @@ Page({
     request({ url: '/api/auth/options', redirectOnAuth: false, auth: false })
       .then((data) => {
         const reviewEntryEnabled = !!data.reviewEntryEnabled;
-        // 即使测试可跳过，也不再自动进入；优先走微信授权手机号，避免落到短信绑号页
+        // 即使测试可跳过，也不再自动进入；优先走手机号快捷登录，避免落到短信绑号页
         this.setData({
           wechatSkip: !!data.wechatSkip,
           reviewEntryEnabled,
@@ -159,7 +159,7 @@ Page({
       wx.setStorageSync('reviewEntrySession', true);
       this.finishLogin();
     }).catch((err) => {
-      this.setData({ error: err.message || '审核体验登录失败', loading: false });
+      this.setData({ error: err.message || '审核账号登录失败', loading: false });
     });
   },
   loginWith(getCode) {
