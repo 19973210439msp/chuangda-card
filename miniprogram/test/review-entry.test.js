@@ -7,6 +7,7 @@ test('login page exposes a server-controlled review entry without embedding its 
   const root = path.join(__dirname, '..');
   const js = fs.readFileSync(path.join(root, 'pages/login/index.js'), 'utf8');
   const wxml = fs.readFileSync(path.join(root, 'pages/login/index.wxml'), 'utf8');
+  const wxss = fs.readFileSync(path.join(root, 'pages/login/index.wxss'), 'utf8');
 
   assert.match(js, /reviewEntryEnabled/);
   assert.match(js, /api\/auth\/review-login/);
@@ -18,6 +19,7 @@ test('login page exposes a server-controlled review entry without embedding its 
   assert.match(wxml, /disabled="\{\{loading \|\| !reviewCodeReady\}\}"/);
   assert.match(wxml, /class="review-toggle" wx:if="\{\{!reviewOpen\}\}"/);
   assert.match(wxml, /class="review-title" wx:else>微信审核体验<\/text>/);
+  assert.match(wxss, /\.review-submit\s*\{[^}]*display:\s*flex;[^}]*min-width:\s*100%;[^}]*box-sizing:\s*border-box;/s);
   assert.match(js, /setStorageSync\('reviewEntrySession', true\)/);
   assert.match(js, /removeStorageSync\('reviewEntrySession'\)/);
   assert.doesNotMatch(js + wxml, /review-demo-code/);

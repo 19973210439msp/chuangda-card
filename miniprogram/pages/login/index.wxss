@@ -145,10 +145,20 @@
 }
 
 .review-submit {
-  margin-top: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 100%;
+  max-width: none;
+  margin: 24rpx 0 0;
+  padding: 0 24rpx;
+  box-sizing: border-box;
   border: 1rpx solid #182850;
   background: #182850;
   color: #ffffff;
+  line-height: normal;
+  text-align: center;
 }
 
 .review-toggle::after,
