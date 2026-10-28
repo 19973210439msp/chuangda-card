@@ -18,7 +18,7 @@
       <view class="row" wx:if="{{reviewEntry}}">
         <image class="ico" src="/assets/icons/switch-account.png" mode="aspectFit"></image>
         <text class="name">账号类型</text>
-        <text class="value">微信审核体验</text>
+        <text class="value">审核专用账号</text>
       </view>
       <view class="row" wx:if="{{reviewEntry}}" bindtap="onSwitchAccount">
         <image class="ico" src="/assets/icons/switch-account.png" mode="aspectFit"></image>

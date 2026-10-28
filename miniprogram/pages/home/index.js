@@ -86,7 +86,7 @@ Page({
   onBindPhone() {
     wx.showModal({
       title: '需要重新登录',
-      content: '手机号仅在登录时通过微信授权获取。是否退出并重新授权登录？',
+      content: '手机号仅在快捷登录时获取。是否退出并重新验证手机号？',
       confirmText: '去登录',
       success: (res) => {
         if (!res.confirm) return;

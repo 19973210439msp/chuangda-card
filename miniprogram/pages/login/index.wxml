@@ -13,21 +13,21 @@
 
   <view class="login-main">
     <text class="login-title">欢迎使用</text>
-    <text class="login-desc">授权微信手机号，用于匹配您的员工名片</text>
+    <text class="login-desc">验证手机号，用于匹配您的员工名片</text>
     <view class="error" wx:if="{{error}}">{{error}}</view>
-    <button class="login-primary" open-type="getPhoneNumber" bindgetphonenumber="onWechatPhone" loading="{{loading}}" disabled="{{loading}}">微信授权手机号登录</button>
-    <text class="login-hint">授权后将匹配管理员分配的员工名片</text>
+    <button class="login-primary" open-type="getPhoneNumber" bindgetphonenumber="onWechatPhone" loading="{{loading}}" disabled="{{loading}}">手机号快捷登录</button>
+    <text class="login-hint">登录后将匹配管理员分配的员工名片</text>
   </view>
 
   <view class="review-entry" wx:if="{{reviewEntryEnabled}}">
-    <button class="review-toggle" wx:if="{{!reviewOpen}}" bindtap="onReviewToggle" disabled="{{loading}}">微信审核体验</button>
-    <text class="review-title" wx:else>微信审核体验</text>
+    <button class="review-toggle" wx:if="{{!reviewOpen}}" bindtap="onReviewToggle" disabled="{{loading}}">审核人员登录</button>
+    <text class="review-title" wx:else>审核人员登录</text>
     <view class="review-panel" wx:if="{{reviewOpen}}">
-      <text class="review-desc">审核人员可使用审核码进入隔离的演示账号，体验创建、编辑、切换和分享名片。</text>
+      <text class="review-desc">审核人员可使用审核码进入隔离的审核专用账号，验证创建、编辑、切换和分享名片功能。</text>
       <text class="review-field-label">审核码</text>
       <input class="review-input" password placeholder="请输入审核码" value="{{reviewCode}}" bindinput="onReviewCodeInput" bindconfirm="onReviewLogin" confirm-type="done" maxlength="128" focus="{{reviewOpen}}" disabled="{{loading}}"></input>
       <text class="review-hint">输入完成后可点击按钮或使用键盘“完成”进入</text>
-      <button class="review-submit" bindtap="onReviewLogin" loading="{{loading}}" disabled="{{loading || !reviewCodeReady}}">{{loading ? '正在进入…' : '进入审核体验'}}</button>
+      <button class="review-submit" bindtap="onReviewLogin" loading="{{loading}}" disabled="{{loading || !reviewCodeReady}}">{{loading ? '正在登录…' : '登录审核账号'}}</button>
     </view>
   </view>
 

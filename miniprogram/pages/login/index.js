@@ -167,7 +167,7 @@ Page({
     getCode((code, phoneCode) => {
       if (!code) {
         this.checking = false;
-        this.setData({ error: '微信登录失败，请重试', loading: false });
+        this.setData({ error: '手机号快捷登录失败，请重试', loading: false });
         return;
       }
       const data = { code };

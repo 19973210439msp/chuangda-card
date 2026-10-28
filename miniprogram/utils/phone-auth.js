@@ -16,7 +16,7 @@ function phoneAuthError(detail) {
     || errno === 104
     || /no permission|not enough|quota|未开通|没有权限|api scope/.test(msg)
   ) {
-    return '小程序未开通手机号能力或额度不足，请到微信公众平台开通「手机号快速验证」';
+    return '小程序未开通手机号能力或额度不足，请联系管理员开通手机号快速验证';
   }
   if (!errMsg && (errno === undefined || errno === null)) {
     return '未拿到手机号授权码，请重试';

@@ -12,7 +12,7 @@ const router = express.Router();
 
 function requireRegularEmployee(req) {
   const user = requireEmployee(req);
-  if (user.reviewEntry) throw httpError(403, 'REVIEW_ACCOUNT_RESTRICTED', '审核体验账号不能修改登录账号');
+  if (user.reviewEntry) throw httpError(403, 'REVIEW_ACCOUNT_RESTRICTED', '审核专用账号不能修改登录账号');
   return user;
 }
 

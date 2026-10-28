@@ -36,7 +36,7 @@ Page({
   onSwitchAccount() {
     wx.showModal({
       title: '切换账号',
-      content: '将退出微信审核体验并返回登录页，之后可使用微信授权手机号登录个人账号。',
+      content: '将退出审核专用账号并返回登录页，之后可使用手机号快捷登录个人账号。',
       confirmText: '切换',
       success: (res) => {
         if (!res.confirm) return;
@@ -55,7 +55,7 @@ Page({
     if (this.data.reviewEntry) {
       wx.showModal({
         title: '无法注销',
-        content: '微信审核体验账号不允许注销，请使用“切换账号”退出审核体验。',
+        content: '审核专用账号不允许注销，请使用“切换账号”退出当前账号。',
         showCancel: false,
         confirmText: '我知道了',
       });

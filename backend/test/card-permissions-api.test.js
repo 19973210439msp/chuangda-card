@@ -80,7 +80,8 @@ test('review entry is isolated, resettable and revoked as soon as its flag is di
     });
     assert.equal(login.status, 200);
     assert.equal(login.json.reviewEntry, true);
-    assert.equal(login.json.employee.name, '审核体验员工');
+    assert.equal(login.json.employee.name, '审核专员');
+    assert.equal(login.json.employee.company, '创大产控审核专用企业');
     assert.equal(login.json.employee.cards.length, 1);
     assert.equal(login.json.employee.cards[0].template, 'classic');
     const reviewToken = login.json.token;

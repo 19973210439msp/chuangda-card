@@ -43,7 +43,7 @@
     <view class="error" wx:if="{{error}}">{{error}}</view>
     <view class="guide" wx:if="{{needPhone}}" bindtap="onBindPhone">
       <text class="guide-title">绑定手机号</text>
-      <text class="guide-desc">请退出后重新用「微信授权手机号登录」，以便匹配管理员导入的名片。</text>
+      <text class="guide-desc">请退出后重新使用「手机号快捷登录」，以便匹配管理员导入的名片。</text>
     </view>
     <view class="guide" wx:if="{{needGuide}}" bindtap="onEdit">
       <text class="guide-title">编辑名片</text>
