@@ -15,7 +15,6 @@
       <card-view card="{{card}}" company="{{company}}" flipped="{{flipped}}"></card-view>
       <text class="flip-hint" bindtap="onFlip">点击名片翻面 · TAP TO FLIP</text>
     </view>
-    <view class="saved" wx:if="{{favorited}}">已收入名片夹，可在「名片夹」里查看</view>
     <view class="ops">
       <view class="op op-call" bindtap="onCall">
         <image src="/assets/icons/phone-action-light.png" mode="aspectFit"></image>

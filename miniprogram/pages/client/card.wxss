@@ -179,13 +179,6 @@
   border: none;
 }
 
-.saved {
-  margin-top: 20rpx;
-  padding: 16rpx 20rpx;
-  border: 1rpx solid #e6e8ee;
-  color: #182850;
-  font-size: 26rpx;
-}
 .exchange {
   margin-top: 20rpx;
   padding: 28rpx;
