@@ -60,9 +60,6 @@ Page({
   onFlip() {
     this.setData({ flipped: !this.data.flipped });
   },
-  onCreate() {
-    if (this.data.canCreate) wx.navigateTo({ url: '/pages/home/switch?mode=create' });
-  },
   onSwitch() {
     wx.navigateTo({ url: '/pages/home/switch?mode=switch' });
   },

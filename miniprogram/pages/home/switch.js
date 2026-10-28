@@ -75,6 +75,9 @@ Page({
       }));
       const cards = allCards.filter((card) => card.lifecycle === 'active');
       const archivedCards = allCards.filter((card) => card.lifecycle === 'archived');
+      const current = cards.find((card) => card.id === employee.activeCardId);
+      const selected = templates.find((item) => current && item.id === current.template && item.companyId === current.companyId)
+        || templates[0];
       this.setData({
         cards,
         archivedCards,
@@ -83,8 +86,8 @@ Page({
         company: brand,
         activeCardId: employee.activeCardId || '',
         templates,
-        draftTemplate: templates[0] ? templates[0].id : '',
-        draftCompanyId: templates[0] ? templates[0].companyId : '',
+        draftTemplate: selected ? selected.id : '',
+        draftCompanyId: selected ? selected.companyId : '',
         error: '',
       });
     }).catch((err) => this.setData({ error: err.message }));
@@ -132,16 +135,23 @@ Page({
     });
   },
   onCreate() {
+    this.saveSelectedCard(false);
+  },
+  onApply() {
+    this.saveSelectedCard(true);
+  },
+  saveSelectedCard(applyToCurrent) {
+    if (this.data.creating) return;
+    if (applyToCurrent ? !this.data.canEdit || !this.data.activeCardId : !this.data.canCreate) return;
     if (!this.data.draftTemplate || !this.data.draftCompanyId) {
       this.setData({ error: '暂无可用模板，请联系管理员分配名片权限或模板' });
       return;
     }
-    if (this.data.mode === 'style' && !this.data.canEdit) return;
     this.setData({ creating: true, error: '' });
     request({
-      url: this.data.mode === 'style' ? '/api/employee/me' : '/api/employee/cards',
-      method: this.data.mode === 'style' ? 'PUT' : 'POST',
-      data: this.data.mode === 'style'
+      url: applyToCurrent ? '/api/employee/me' : '/api/employee/cards',
+      method: applyToCurrent ? 'PUT' : 'POST',
+      data: applyToCurrent
         ? { cardTemplate: this.data.draftTemplate, companyId: this.data.draftCompanyId }
         : { template: this.data.draftTemplate, companyId: this.data.draftCompanyId },
     }).then(() => {

@@ -41,7 +41,10 @@
       <view wx:if="{{!templates.length}}">
         <text class="desc">暂无可用模板，请联系管理员设置名片权限或发放企业模板。</text>
       </view>
-      <button class="primary" wx:elif="{{mode !== 'style' || canEdit}}" bindtap="onCreate" loading="{{creating}}">{{mode === 'style' ? '应用到当前名片' : '创建并填写'}}</button>
+      <view class="style-actions" wx:else>
+        <button class="ghost" wx:if="{{mode === 'style' && canEdit && activeCardId}}" bindtap="onApply" loading="{{creating}}" disabled="{{creating}}">应用到当前名片</button>
+        <button class="primary" wx:if="{{canCreate}}" bindtap="onCreate" loading="{{creating}}" disabled="{{creating}}">{{mode === 'style' ? '新建名片' : '创建并填写'}}</button>
+      </view>
     </view>
   </view>
 </scroll-view>
