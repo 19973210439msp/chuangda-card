@@ -123,9 +123,25 @@
 }
 
 .review-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border: 1rpx solid #29477d;
   background: #ffffff;
   color: #29477d;
+  line-height: normal;
+  text-align: center;
+}
+
+.review-title {
+  display: block;
+  width: 100%;
+  color: #182850;
+  font-size: 30rpx;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .review-submit {

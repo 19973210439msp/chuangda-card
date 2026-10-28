@@ -16,6 +16,8 @@ test('login page exposes a server-controlled review entry without embedding its 
   assert.match(wxml, /confirm-type="done"/);
   assert.match(wxml, /bindconfirm="onReviewLogin"/);
   assert.match(wxml, /disabled="\{\{loading \|\| !reviewCodeReady\}\}"/);
+  assert.match(wxml, /class="review-toggle" wx:if="\{\{!reviewOpen\}\}"/);
+  assert.match(wxml, /class="review-title" wx:else>微信审核体验<\/text>/);
   assert.match(js, /setStorageSync\('reviewEntrySession', true\)/);
   assert.match(js, /removeStorageSync\('reviewEntrySession'\)/);
   assert.doesNotMatch(js + wxml, /review-demo-code/);
