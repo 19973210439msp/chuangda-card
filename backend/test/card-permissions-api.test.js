@@ -624,9 +624,7 @@ test('level-three templates match HQ catalog once each and keep company choices 
   }
   const custom = available.json.items.find((item) => item.id === templateId);
   assert.equal(custom.companyId, companyId);
-  const companyNames = new Map(companies.json.items.map((entry) => [entry.id, entry.name]));
-  assert.ok(custom.companyOptions.every((option) => option.company.name === companyNames.get(option.companyId)));
-  assert.equal(custom.companyOptions.find((option) => option.companyId === companyId).company.name, '模板去重企业');
+  assert.ok(custom.companyOptions.every((option) => option.company.name === '定制品牌'));
 
   const newCard = await api('/api/employee/cards', {
     method: 'POST', token, body: { template: templateId, companyId: 'default' },

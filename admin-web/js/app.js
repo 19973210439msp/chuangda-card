@@ -191,14 +191,12 @@ function defaultCardFields(item) {
   return cardFields(item, card);
 }
 
-function templateOptions(currentId) {
-  return (state.templates || [])
-    .filter((item) => item.builtIn || ['classic', 'horizon', 'wave'].includes(item.id) || (currentId && item.id === currentId))
-    .map((item) => [item.id, item.name]);
+function templateOptions() {
+  return (state.templates || []).map((item) => [item.id, item.name]);
 }
 
 function cardTemplateId(value) {
-  const options = templateOptions(value);
+  const options = templateOptions();
   return options.some(([id]) => id === value) ? value : (options[0] ? options[0][0] : '');
 }
 
@@ -245,8 +243,8 @@ function cardFace(kind) {
   if (kind === 'wave') {
     return `<div class="pv pv-wave"><img class="pv-wave-bg" src="/wave-front.jpg" alt=""><span class="pv-wv-name">张伟</span><span class="pv-wv-title">客户经理</span><span class="pv-wv-row pv-wv-phone">13800000000</span><span class="pv-wv-row pv-wv-email">zhangwei@chuangda.com</span><span class="pv-wv-row pv-wv-address">${esc(add)}</span><img class="pv-wv-qr" src="/official-qr.jpg" alt=""></div>`;
   }
-  const qr = brand.qrUrl || (custom && custom.qrUrl) || '/official-qr.jpg';
-  return `<div class="pv pv-classic"><div class="pv-corp"><span class="pv-corp-cn">${esc(brand.name || '上海创大产控高新技术集团有限公司')}</span><span class="pv-corp-en">${esc(brand.nameEn || 'SHANGHAI CHUANGDA CHANKONG HI-TECH GROUP CO., LTD.')}</span></div><div class="pv-brand"><img class="pv-seal" src="/brand-logo.png?v=3" alt=""><span class="pv-brand-cn">${esc(brand.shortName || '创大产控')}</span><span class="pv-brand-en">${esc(brand.brandEn || 'CHUANGDACHANKONG')}</span></div><div class="pv-who"><span class="pv-name">张伟</span><span class="pv-title">客户经理</span></div><span class="pv-mobile">M:13800000000</span><span class="pv-tick"></span><div class="pv-contact"><span>电话/Tel:${esc(tel)}</span><span>邮箱/E-mail:zhangwei@chuangda.com</span><span>地址/Add:${esc(add)}</span></div><img class="pv-qr" src="${esc(qr)}" alt=""></div>`;
+  const qr = (custom && custom.qrUrl) || brand.qrUrl || '/official-qr.jpg';
+  return `<div class="pv pv-classic"><div class="pv-corp"><span class="pv-corp-cn">${esc(custom && custom.companyName || brand.name || '上海创大产控高新技术集团有限公司')}</span><span class="pv-corp-en">${esc(custom && custom.companyNameEn || brand.nameEn || 'SHANGHAI CHUANGDA CHANKONG HI-TECH GROUP CO., LTD.')}</span></div><div class="pv-brand"><img class="pv-seal" src="/brand-logo.png?v=3" alt=""><span class="pv-brand-cn">${esc(custom && custom.shortName || brand.shortName || '创大产控')}</span><span class="pv-brand-en">${esc(custom && custom.shortNameEn || brand.brandEn || 'CHUANGDACHANKONG')}</span></div><div class="pv-who"><span class="pv-name">张伟</span><span class="pv-title">客户经理</span></div><span class="pv-mobile">M:13800000000</span><span class="pv-tick"></span><div class="pv-contact"><span>电话/Tel:${esc(tel)}</span><span>邮箱/E-mail:zhangwei@chuangda.com</span><span>地址/Add:${esc(add)}</span></div><img class="pv-qr" src="${esc(qr)}" alt=""></div>`;
 }
 
 function templateGallery() {
@@ -532,6 +530,7 @@ function brandHtml() {
 }
 
 function templatesHtml() {
+  const company = state.company || {};
   const isHq = !state.admin || state.admin.scope !== 'company';
   const editing = (state.templates || []).find((item) => item.id === state.editingTemplate) || null;
   const editingBuiltIn = !!(editing && editing.builtIn);
@@ -546,16 +545,19 @@ function templatesHtml() {
       <span class="template-row-view">查看模板图 <span aria-hidden="true">›</span></span>
     </button>`).join('');
   return shell('模板管理', `
-    <p class="lede">${isHq ? '点击模板查看名片图和已分配的企业。员工先选归属公司，再选版式。名片上的公司名、电话和地址来自创建时选择的归属公司；电话或地址没填时用总部的。' : '这里只显示总部明确发放给本公司的模板。名片上的公司名、电话和地址使用本公司品牌设置；没填时用总部的。'}</p>
+    <p class="lede">${isHq ? '点击模板查看名片图和已分配的企业。用户先选归属公司，再选择该公司获配的模板；电话和地址来自所选公司，留空时使用总部资料。' : '这里只显示总部明确发放给本公司的模板。名片电话和地址使用本公司资料，留空时使用总部资料。'}</p>
     ${isHq ? `<details class="panel template-builder" ${editing ? 'open' : ''}>
       <summary><strong>${editing ? '修改名片模板：' + esc(editing.name) : '＋ 创建名片模板'}</strong><span>设置模板名称、二维码和可使用的企业</span></summary>
       <form data-form="template" enctype="multipart/form-data">
       <input type="hidden" name="templateId" value="${esc(editing && editing.id || '')}">
       ${editingBuiltIn ? '<p class="lede">内置模板的版式保持固定，这里只调整哪家企业可以使用。</p>' : `<div class="grid-2">
         <div>${field('tpl-name', '模板名称', editing && editing.name || '')}</div>
+        <div>${field('companyName', '左上角公司名称', editing && editing.companyName || company.name)}</div>
+        <div>${field('companyNameEn', '左上角公司英文名', editing && editing.companyNameEn || company.nameEn)}</div>
+        <div>${field('shortName', 'Logo 下方公司简称', editing && editing.shortName || company.shortName)}</div>
+        <div>${field('shortNameEn', 'Logo 下方英文简称', editing && editing.shortNameEn || company.brandEn)}</div>
         <div><label for="qr-file">右下角公众号二维码</label><input id="qr-file" name="qrFile" type="file" accept="image/png,image/jpeg,image/webp"><p class="lede">${editing && editing.qrUrl ? '当前已上传；不选择文件会保留原二维码。' : 'PNG、JPG 或 WebP，最大 8 MB'}</p></div>
-      </div>
-      <p class="lede">名片上的公司名和简称使用员工创建时选择的归属公司，不在模板里填写。</p>`}
+      </div>`}
       <fieldset class="template-assignees"><legend>分配给企业</legend>
         <p class="template-assignee-help">勾选后，该企业管理员可使用此模板；拥有该企业二级名片权限的账号也可使用。三级名片权限可使用全部模板。</p>
         <div class="template-assignee-grid">${companyOptions.map((item) => `<label class="template-assignee-option"><input type="checkbox" name="companyIds" value="${esc(item.id)}" ${(editing && editing.companyIds || []).includes(item.id) ? 'checked' : ''}><span><strong>${esc(item.shortName || item.name)}</strong><small>${esc(item.name)}</small></span></label>`).join('') || '<p class="lede">请先创建子公司，再分配模板。</p>'}</div>
@@ -920,10 +922,10 @@ document.addEventListener('submit', async (event) => {
         method: fields.templateId ? 'PUT' : 'POST',
         body: {
           name: fields['tpl-name'],
-          companyName: currentTemplate && currentTemplate.companyName,
-          companyNameEn: currentTemplate && currentTemplate.companyNameEn,
-          shortName: currentTemplate && currentTemplate.shortName,
-          shortNameEn: currentTemplate && currentTemplate.shortNameEn,
+          companyName: fields.companyName,
+          companyNameEn: fields.companyNameEn,
+          shortName: fields.shortName,
+          shortNameEn: fields.shortNameEn,
           qrUrl,
           companyIds: new FormData(form).getAll('companyIds'),
         },

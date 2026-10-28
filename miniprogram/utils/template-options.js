@@ -1,14 +1,8 @@
-const BUILT_IN_TEMPLATE_IDS = new Set(['classic', 'horizon', 'wave']);
-
 // One row per company grant. The style list is chosen after the company.
 function expandTemplateOptions(items) {
   return (items || []).flatMap((item) => Array.isArray(item.companyOptions)
     ? item.companyOptions.map((option) => ({ ...item, ...option }))
     : [item]);
-}
-
-function isBuiltInTemplate(item) {
-  return !!(item && (item.builtIn || BUILT_IN_TEMPLATE_IDS.has(item.id)));
 }
 
 function templateCompanies(items) {
@@ -30,7 +24,7 @@ function templateSelection(options, templateId, companyId) {
   const templates = [];
   const seen = new Set();
   for (const item of rows) {
-    if (!selectedCompany || item.companyId !== selectedCompany.id || !isBuiltInTemplate(item) || seen.has(item.id)) continue;
+    if (!selectedCompany || item.companyId !== selectedCompany.id || seen.has(item.id)) continue;
     seen.add(item.id);
     templates.push(item);
   }

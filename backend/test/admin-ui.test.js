@@ -220,10 +220,36 @@ test('shared templates tell each company to fill its own phone and address', () 
     state.companies = [];
   `, context);
   const templates = vm.runInContext('templatesHtml()', context);
-  assert.match(templates, /创建时选择的归属公司/);
+  assert.match(templates, /电话和地址来自所选公司/);
   assert.doesNotMatch(templates, /name="phone"|name="address"/);
   const brand = vm.runInContext('brandHtml()', context);
   assert.match(brand, /名片归属公司/);
   assert.match(brand, /留空则先显示总部的/);
   assert.match(brand, /021-5888 6080/);
+});
+
+test('custom templates remain selectable and editable in the admin template design', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../admin-web/js/app.js'), 'utf8');
+  const page = { innerHTML: '', querySelector: () => null };
+  const context = vm.createContext({
+    document: { querySelector: (selector) => selector === '#app' ? page : null, addEventListener: () => {} },
+    window: { addEventListener: () => {} }, location: { hash: '#/templates' }, token: () => '',
+  });
+  vm.runInContext(source, context);
+  const gallery = vm.runInContext(`
+    state.admin = { scope: 'hq' };
+    state.company = { name: '总部', nameEn: 'HQ', shortName: '总部', brandEn: 'HQ' };
+    state.templates = [
+      { id: 'classic', name: '创大产控模板', builtIn: true },
+      { id: 'tpl-custom', name: '武创大智', builtIn: false, companyName: '武创大智公司' },
+    ];
+    templateGallery();
+  `, context);
+  assert.match(gallery, /data-template="tpl-custom"/);
+  vm.runInContext("state.editingTemplate = 'tpl-custom'; state.previewTemplate = ''; state.companies = [];", context);
+  const management = vm.runInContext('templatesHtml()', context);
+  assert.match(management, /name="companyName"/);
+  assert.match(management, /name="companyNameEn"/);
+  assert.match(management, /name="shortName"/);
+  assert.match(management, /name="shortNameEn"/);
 });

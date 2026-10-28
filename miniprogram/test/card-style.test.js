@@ -125,7 +125,7 @@ function groupedTemplates() {
   }));
 }
 
-test('level-three style page shows the built-in layouts for the selected company', async () => {
+test('level-three style page shows every layout for the selected company', async () => {
   const calls = [];
   const { page } = loadPage('switch.js', async (options) => {
     if (options.method === 'POST') { calls.push(options); return {}; }
@@ -135,13 +135,13 @@ test('level-three style page shows the built-in layouts for the selected company
   });
   page.load();
   await new Promise(setImmediate);
-  assert.deepEqual(page.data.templates.map((item) => item.id), ['classic', 'horizon', 'wave']);
+  assert.deepEqual(page.data.templates.map((item) => item.id), ['classic', 'horizon', 'wave', 'tpl-custom']);
   assert.equal(page.data.templateCompanies.length, 2);
   assert.equal(page.data.chooseCompany, true);
   assert.equal(page.data.draftCompanyId, 'company-1');
   assert.equal(page.data.templates.find((item) => item.id === 'classic').preview.company, '子公司');
   page.onTemplateCompanyChange({ detail: { value: '0' } });
-  assert.deepEqual(page.data.templates.map((item) => item.id), ['classic', 'horizon', 'wave']);
+  assert.deepEqual(page.data.templates.map((item) => item.id), ['classic', 'horizon', 'wave', 'tpl-custom']);
   assert.equal(page.data.draftTemplate, 'wave');
   assert.equal(page.data.draftCompanyId, 'default');
   assert.ok(page.data.templates.every((item) => item.companyId === 'default'));
@@ -179,16 +179,17 @@ test('level-two style page chooses a company before listing that company layouts
         ] },
         { id: 'horizon', companyOptions: [{ companyId: 'company-a', companyName: '甲公司' }] },
         { id: 'wave', companyOptions: [{ companyId: 'company-b', companyName: '乙公司' }] },
+        { id: 'tpl-custom', companyOptions: [{ companyId: 'company-a', companyName: '甲公司' }] },
       ],
     });
   page.load();
   await new Promise(setImmediate);
-  assert.deepEqual(Array.from(page.data.templates, (item) => item.id), ['classic', 'horizon']);
+  assert.deepEqual(Array.from(page.data.templates, (item) => item.id), ['classic', 'horizon', 'tpl-custom']);
   assert.equal(page.data.draftTemplate, 'classic');
   assert.equal(page.data.chooseCompany, true);
   assert.deepEqual(Array.from(page.data.templateCompanies, (item) => item.id), ['company-a', 'company-b']);
   page.onTemplate({ currentTarget: { dataset: { template: 'horizon', company: 'company-a' } } });
-  assert.deepEqual(Array.from(page.data.templates, (item) => item.id), ['classic', 'horizon']);
+  assert.deepEqual(Array.from(page.data.templates, (item) => item.id), ['classic', 'horizon', 'tpl-custom']);
   assert.equal(page.data.chooseCompany, true);
   assert.equal(page.data.draftCompanyId, 'company-a');
   page.onTemplateCompanyChange({ detail: { value: '1' } });
