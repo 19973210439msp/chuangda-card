@@ -82,29 +82,14 @@ function firstFilled(values) {
   return '';
 }
 
-function sameCompanyName(company, printed) {
-  if (!company || company.id === 'default' || company.reviewOnly || company.reviewEntry) return false;
-  const name = text(company.name, 160);
-  const shortName = text(company.shortName, 40);
-  return !!printed && (name === printed || shortName === printed);
-}
-
-function contactForPrintedName(printed, companies, root) {
-  const matched = (companies || []).find((company) => sameCompanyName(company, printed));
-  const hq = root || {};
-  return {
-    phone: firstFilled([matched && matched.phone, hq.phone]),
-    address: firstFilled([matched && matched.address, hq.address]),
-  };
-}
-
-function companyForTemplate(company, root, templateId, companies) {
+function companyForTemplate(company, root, templateId) {
   const template = listTemplates(root).find((item) => item.id === templateId);
   const base = company || {};
   const hq = root || {};
-  const printed = text((template && template.companyName) || base.name || hq.name, 160);
-  const list = Array.isArray(companies) && companies.length ? companies : [base, hq];
-  const contact = contactForPrintedName(printed, list, hq);
+  const contact = {
+    phone: firstFilled([base.phone, hq.phone]),
+    address: firstFilled([base.address, hq.address]),
+  };
   if (!template) {
     if (!company) return company;
     return { ...base, ...contact };

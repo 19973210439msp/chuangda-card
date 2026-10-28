@@ -220,10 +220,10 @@ test('shared templates tell each company to fill its own phone and address', () 
     state.companies = [];
   `, context);
   const templates = vm.runInContext('templatesHtml()', context);
-  assert.match(templates, /按模板上的公司名匹配子公司/);
+  assert.match(templates, /创建时选择的归属公司/);
   assert.doesNotMatch(templates, /name="phone"|name="address"/);
   const brand = vm.runInContext('brandHtml()', context);
-  assert.match(brand, /模板上印的公司名/);
-  assert.match(brand, /对不上，或这里留空，就用总部的/);
+  assert.match(brand, /名片归属公司/);
+  assert.match(brand, /留空则先显示总部的/);
   assert.match(brand, /021-5888 6080/);
 });

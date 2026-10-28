@@ -24,46 +24,26 @@ test('built-in templates keep a subsidiary phone and otherwise use the headquart
   assert.equal(blank.address, '上海市浦东新区金桥红枫路288号');
 });
 
-test('the company name printed on the template picks that subsidiary, otherwise headquarters', () => {
-  const suzhou = {
-    id: 'co-sz',
-    name: '武创人工智能科技研究院(苏州)有限公司',
-    phone: '0512-6666 8888',
-    address: '苏州工业园区',
-  };
-  const other = { id: 'co-ot', name: '其他子公司', phone: '021-1111 2222', address: '其他地址' };
+test('the selected company supplies the phone and address even when the template prints another name', () => {
+  const selected = { id: 'co-sz', name: '武创人工智能科技研究院(苏州)有限公司', phone: '0512-6666 8888', address: '苏州工业园区' };
   const root = {
     ...hq,
     id: 'default',
     cardTemplates: [{
       id: 'tpl-1',
-      companyName: suzhou.name,
+      companyName: '模板上的另一家公司',
       companyNameEn: 'CUSTOM',
       shortName: '武创',
       shortNameEn: 'CUSTOM',
       qrUrl: '',
     }],
   };
-  const matched = companyForTemplate(other, root, 'tpl-1', [suzhou, other, root]);
-  assert.equal(matched.name, suzhou.name);
-  assert.equal(matched.phone, suzhou.phone);
-  assert.equal(matched.address, suzhou.address);
+  const branded = companyForTemplate(selected, root, 'tpl-1');
+  assert.equal(branded.name, '模板上的另一家公司');
+  assert.equal(branded.phone, selected.phone);
+  assert.equal(branded.address, selected.address);
 
-  const unmatched = companyForTemplate(
-    { id: 'co-x', name: '对不上的公司', phone: '021-1111 2222', address: '不该用这家' },
-    root,
-    'classic',
-    [suzhou, other, root],
-  );
-  assert.equal(unmatched.phone, hq.phone);
-  assert.equal(unmatched.address, hq.address);
-
-  const blank = companyForTemplate(
-    { ...suzhou, phone: '', address: '' },
-    root,
-    'classic',
-    [{ ...suzhou, phone: '', address: '' }, root],
-  );
+  const blank = companyForTemplate({ ...selected, phone: '', address: '' }, root, 'tpl-1');
   assert.equal(blank.phone, hq.phone);
   assert.equal(blank.address, hq.address);
 });

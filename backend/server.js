@@ -1113,17 +1113,16 @@ app.get('/api/employee/me', asyncRoute(async (req, res) => {
     canDelete: canManageTemplate(permission, root, card.template),
   }));
   const company = employee.companyId ? await store.getCompany(employee.companyId) : null;
-  const directory = await managedCompanies({ includeReviewEntry: isReviewEntryPerson(user) });
   const cardCompanies = {};
   await Promise.all((employee.cards || []).map(async (card) => {
     const cardCompany = card.companyId ? await store.getCompany(card.companyId) : null;
     cardCompanies[card.id] = cardCompany
-      ? publicCompany(companyForTemplate(cardCompany, root, card.template, directory))
+      ? publicCompany(companyForTemplate(cardCompany, root, card.template))
       : null;
   }));
   res.json({
     employee,
-    templateCompany: company ? publicCompany(companyForTemplate(company, root, employee.cardTemplate, directory)) : null,
+    templateCompany: company ? publicCompany(companyForTemplate(company, root, employee.cardTemplate)) : null,
     cardCompanies,
     permission,
     reviewEntry: isReviewEntryPerson(user),
@@ -1135,8 +1134,8 @@ app.get('/api/employee/templates', asyncRoute(async (req, res) => {
   const user = requireEmployee(req);
   const root = await store.getCompany('default');
   const permission = effectivePermission(user, root);
-  const directory = await managedCompanies({ includeReviewEntry: isReviewEntryPerson(user) });
-  const companies = directory.filter((company) => canManageCompany(permission, company.id));
+  const companies = (await managedCompanies({ includeReviewEntry: isReviewEntryPerson(user) }))
+    .filter((company) => canManageCompany(permission, company.id));
   const items = [];
   for (const template of allTemplates(root)) {
     const companyOptions = [];
@@ -1144,7 +1143,7 @@ app.get('/api/employee/templates', asyncRoute(async (req, res) => {
       if (permission.level !== 3 && !templateGrantedTo(root, template.id, company.id)) continue;
       companyOptions.push({
         companyId: company.id, companyName: company.name,
-        company: publicCompany(companyForTemplate(company, root, template.id, directory)),
+        company: publicCompany(companyForTemplate(company, root, template.id)),
       });
     }
     if ((template.companyIds || []).includes('default')) {
@@ -1288,9 +1287,8 @@ app.get('/api/cards/:id', asyncRoute(async (req, res) => {
   const card = publicCard(person, text(req.query.shareCard, 64));
   const root = await store.getCompany('default');
   const assignedCompany = card.companyId ? await store.getCompany(card.companyId) : null;
-  const directory = await managedCompanies();
   const company = assignedCompany
-    ? publicCompany(companyForTemplate(assignedCompany, root, card.cardTemplate, directory))
+    ? publicCompany(companyForTemplate(assignedCompany, root, card.cardTemplate))
     : null;
   res.json({ card, company, owned: false });
 }));

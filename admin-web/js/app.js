@@ -504,7 +504,7 @@ function brandHtml() {
   const company = state.company || {};
   return shell('品牌设置', `
     <form class="panel" data-form="brand">
-      <p class="lede">名片按模板上印的公司名来取电话和地址。名称和这里的公司名一致时，用这里填写的；对不上，或这里留空，就用总部的。</p>
+      <p class="lede">创建名片时选的「名片归属公司」会使用这里的电话和地址。留空则先显示总部的。</p>
       <div class="grid-2">
         <div>${field('name', '公司全称', company.name)}</div>
         <div>${field('shortName', '简称', company.shortName)}</div>
@@ -544,7 +544,7 @@ function templatesHtml() {
       <span class="template-row-view">查看模板图 <span aria-hidden="true">›</span></span>
     </button>`).join('');
   return shell('模板管理', `
-    <p class="lede">${isHq ? '点击模板查看名片图和已分配的企业。电话和地址按模板上的公司名匹配子公司；匹配不上，或该公司没填，就用总部的。同一种模板分给多家企业时，默认先显示总公司。' : '这里只显示总部明确发放给本公司的模板。电话和地址按模板上的公司名匹配；匹配不上就用总部的。'}</p>
+    <p class="lede">${isHq ? '点击模板查看名片图和已分配的企业。名片上的电话和地址来自创建时选择的归属公司；该公司没填时用总部的。同一种模板分给多家企业时，默认先显示总公司。' : '这里只显示总部明确发放给本公司的模板。名片上的电话和地址使用本公司品牌设置；没填时用总部的。'}</p>
     ${isHq ? `<details class="panel template-builder" ${editing ? 'open' : ''}>
       <summary><strong>${editing ? '修改名片模板：' + esc(editing.name) : '＋ 创建名片模板'}</strong><span>基于创大产控模板，设置公司文案、二维码与使用范围</span></summary>
       <form data-form="template" enctype="multipart/form-data">
