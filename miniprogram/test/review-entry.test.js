@@ -10,6 +10,7 @@ test('login page exposes a server-controlled review entry without embedding its 
   const wxss = fs.readFileSync(path.join(root, 'pages/login/index.wxss'), 'utf8');
 
   assert.match(js, /reviewEntryEnabled/);
+  assert.match(js, /wechatSkip:\s*false/);
   assert.match(js, /api\/auth\/review-login/);
   assert.match(wxml, /wx:if="\{\{reviewEntryEnabled\}\}"/);
   assert.match(wxml, /手机号快捷登录/);
@@ -26,6 +27,9 @@ test('login page exposes a server-controlled review entry without embedding its 
   assert.match(js, /setStorageSync\('reviewEntrySession', true\)/);
   assert.match(js, /removeStorageSync\('reviewEntrySession'\)/);
   assert.doesNotMatch(js + wxml, /review-demo-code/);
+  assert.equal(fs.existsSync(path.join(root, 'assets/icons/wechat-action.png')), false);
+  assert.equal(fs.existsSync(path.join(root, 'assets/icons/wechat.png')), false);
+  assert.equal(fs.existsSync(path.join(root, 'assets/wechat-logo.jpg')), false);
 });
 
 test('review account can switch to personal login but cannot close the dedicated account', () => {

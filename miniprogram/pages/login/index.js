@@ -6,7 +6,7 @@ const { favoriteCompletion, favoritePayload, sharedCardPath, sharedEntryPath } =
 
 Page({
   data: {
-    wechatSkip: true,
+    wechatSkip: false,
     reviewEntryEnabled: false,
     reviewOpen: false,
     reviewCode: '',

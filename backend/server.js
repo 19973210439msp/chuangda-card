@@ -536,7 +536,7 @@ app.post('/api/auth/wechat', asyncRoute(async (req, res) => {
 
   if (req.body && req.body.resume) {
     if (!person || person.status !== 'active') {
-      throw httpError(404, 'NO_SESSION', '需要微信授权手机号');
+      throw httpError(404, 'NO_SESSION', '需要完成手机号快捷登录');
     }
     await rememberOpenAccount(store, openid, person.id);
     const session = await createSession(store, person.id, 'employee');
@@ -554,7 +554,7 @@ app.post('/api/auth/wechat', asyncRoute(async (req, res) => {
   const phoneCode = text(req.body && req.body.phoneCode, 256);
   const requirePhone = !config.wechatSkipAllowed();
   if (!(person && person.status === 'active') && requirePhone && !phoneCode) {
-    throw httpError(400, 'PHONE_REQUIRED', '请授权微信绑定手机号后登录');
+    throw httpError(400, 'PHONE_REQUIRED', '请完成手机号快捷验证后登录');
   }
 
   let phone = '';

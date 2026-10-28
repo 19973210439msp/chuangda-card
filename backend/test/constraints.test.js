@@ -75,6 +75,15 @@ test('production cannot skip WeChat auth', () => {
   else process.env.SKIP_WECHAT_AUTH = previousSkip;
 });
 
+test('login-facing errors avoid platform-branded copy', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const wechat = fs.readFileSync(path.join(__dirname, '../lib/wechat.js'), 'utf8');
+  const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+  assert.doesNotMatch(wechat, /微信登录未配置|微信授权失败|微信手机号授权失败/);
+  assert.doesNotMatch(server, /需要微信授权手机号|请授权微信绑定手机号后登录/);
+});
+
 test('card access audit reports migration risks without exposing card fields', () => {
   const { summarizeCardAccess } = require('../lib/cardAudit');
   const summary = summarizeCardAccess({

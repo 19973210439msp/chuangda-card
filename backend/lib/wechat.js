@@ -16,7 +16,7 @@ function devOpenId(code) {
 
 async function openIdFromCode(code) {
   const raw = String(code == null ? '' : code).trim();
-  if (!raw) throw httpError(400, 'VALIDATION_ERROR', '缺少微信登录 code');
+  if (!raw) throw httpError(400, 'VALIDATION_ERROR', '缺少登录凭证');
   if (config.wechatSkipAllowed()) {
     const dev = devOpenId(raw);
     if (dev) return dev;
@@ -24,7 +24,7 @@ async function openIdFromCode(code) {
   const appid = (process.env.WECHAT_APPID || '').trim();
   const secret = (process.env.WECHAT_SECRET || '').trim();
   if (!appid || !secret) {
-    throw httpError(503, 'WECHAT_NOT_CONFIGURED', '微信登录未配置');
+    throw httpError(503, 'WECHAT_NOT_CONFIGURED', '登录服务未配置');
   }
   const url = new URL('https://api.weixin.qq.com/sns/jscode2session');
   url.searchParams.set('appid', appid);
@@ -34,7 +34,7 @@ async function openIdFromCode(code) {
   const response = await fetch(url);
   const data = await response.json();
   if (!data || data.errcode || !data.openid) {
-    throw httpError(401, 'WECHAT_AUTH_FAILED', (data && data.errmsg) || '微信授权失败');
+    throw httpError(401, 'WECHAT_AUTH_FAILED', (data && data.errmsg) || '登录验证失败');
   }
   return data.openid;
 }
@@ -43,7 +43,7 @@ function wechatCredentials() {
   const appid = (process.env.WECHAT_APPID || '').trim();
   const secret = (process.env.WECHAT_SECRET || '').trim();
   if (!appid || !secret) {
-    throw httpError(503, 'WECHAT_NOT_CONFIGURED', '微信登录未配置');
+    throw httpError(503, 'WECHAT_NOT_CONFIGURED', '登录服务未配置');
   }
   return { appid, secret };
 }
@@ -65,7 +65,7 @@ async function wechatAccessToken() {
   const response = await fetch(url);
   const data = await response.json();
   if (!data || !data.access_token) {
-    throw httpError(503, 'WECHAT_AUTH_FAILED', '微信手机号授权失败');
+    throw httpError(503, 'WECHAT_AUTH_FAILED', '手机号验证服务异常');
   }
   cachedToken = {
     value: data.access_token,
@@ -103,7 +103,7 @@ async function phoneFromWechatCode(phoneCode) {
   const info = data && data.phone_info;
   const phone = mainlandPhone(info && (info.purePhoneNumber || info.phoneNumber));
   if (!/^1\d{10}$/.test(phone)) {
-    throw httpError(401, 'WECHAT_AUTH_FAILED', '微信手机号授权失败');
+    throw httpError(401, 'WECHAT_AUTH_FAILED', '手机号验证失败');
   }
   return phone;
 }
