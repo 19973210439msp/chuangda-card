@@ -84,7 +84,7 @@
 <view class="copy-mask" wx:if="{{copyLink}}" catchtouchmove="onCopyHold">
   <view class="copy-panel">
     <text class="copy-title">长按下方链接复制</text>
-    <text class="copy-desc">微信未允许这个小程序写入剪切板，长按链接即可复制。</text>
+    <text class="copy-desc">当前环境未允许写入剪切板，长按链接即可复制。</text>
     <text class="copy-url" user-select="{{true}}">{{copyLink}}</text>
     <view class="copy-close" bindtap="onCloseCopy">关闭</view>
   </view>

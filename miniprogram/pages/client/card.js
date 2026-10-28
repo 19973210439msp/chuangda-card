@@ -180,15 +180,15 @@ Page({
     };
     const client = contactClient();
     if (client === 'desktop') {
-      showFail('电脑版微信不能把联系人写入手机通讯录。请用手机微信打开这张名片后再保存。');
+      showFail('电脑端不能把联系人写入手机通讯录。请用手机打开这张名片后再保存。');
       return;
     }
     if (client === 'harmony') {
-      showFail('鸿蒙版微信目前不能把联系人写入通讯录。');
+      showFail('当前系统暂不能把联系人写入通讯录。');
       return;
     }
     if (!wx.canIUse('addPhoneContact')) {
-      showFail('当前手机微信不能把联系人写入通讯录。');
+      showFail('当前环境不能把联系人写入通讯录。');
       return;
     }
     let settled = false;
@@ -204,16 +204,16 @@ Page({
         success: () => { settled = true; },
         fail: () => {
           settled = true;
-          showFail('微信没有完成保存。');
+          showFail('联系人没有保存成功。');
         },
         complete: () => {
           if (settled) return;
           settled = true;
-          showFail('微信没有完成保存。');
+          showFail('联系人没有保存成功。');
         },
       });
     } catch (err) {
-      showFail('微信没有完成保存。');
+      showFail('联系人没有保存成功。');
     }
   },
   onExchange() { this.setData({ exchangeOpen: true }); },

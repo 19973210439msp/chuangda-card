@@ -9,7 +9,7 @@ function maskPhone(phone) {
   return '+86 ' + local.slice(0, 3) + '****' + local.slice(-4);
 }
 
-/** 仅记录当前登录身份；一微信一手机号，不做多账号切换。 */
+/** 仅记录当前登录身份；一个登录身份对应一个手机号，不做多账号切换。 */
 function remember(employee) {
   if (!employee || !employee.id) return;
   try {

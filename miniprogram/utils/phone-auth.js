@@ -1,6 +1,6 @@
 /**
  * 解析 button open-type="getPhoneNumber" 的回调。
- * 微信失败时几乎都带 fail，不能一律当成“用户拒绝”。
+ * 授权失败时几乎都带 fail，不能一律当成“用户拒绝”。
  */
 function phoneAuthError(detail) {
   const info = detail || {};
