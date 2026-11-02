@@ -250,8 +250,8 @@ th, td { text-align: left; padding: 13px 12px; border-bottom: 1px solid var(--li
 .permission-companies label { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 13px; }
 .permission-companies input { width: 16px; height: 16px; margin: 0; }
 .company-account-manager { min-width: 220px; }
-.company-account-manager summary { cursor: pointer; color: var(--navy); font-weight: 700; }
-.company-admin-form { display: grid; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.company-admin-form { display: grid; gap: 8px; }
+.company-admin-form + .company-admin-form { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .company-admin-form label { margin: 0; font-size: 12px; }
 .company-admin-form input { margin-top: 4px; min-width: 190px; }
 th {

@@ -70,7 +70,7 @@ test('admin card management shows account-only users and separates account phone
   assert.equal(pasted[0].title, '产品经理');
 });
 
-test('hq subsidiary table includes account management and guarded company deletion', () => {
+test('hq can create subsidiaries and only reset existing manager passwords or delete subsidiaries', () => {
   const source = fs.readFileSync(path.join(__dirname, '../../admin-web/js/app.js'), 'utf8');
   const page = { innerHTML: '', querySelector: () => null };
   const context = vm.createContext({
@@ -89,9 +89,15 @@ test('hq subsidiary table includes account management and guarded company deleti
     ];
     companiesHtml();
   `, context);
-  assert.match(html, /账号管理/);
-  assert.match(html, /manager-a/);
+  assert.match(html, /<strong>manager-a<\/strong>/);
   assert.match(html, /data-form="company-admin"/);
+  assert.match(html, /修改密码/);
+  assert.match(html, /新建子公司/);
+  assert.match(html, /创建公司和账号/);
+  assert.doesNotMatch(html, /新增管理员/);
+  assert.doesNotMatch(html, /删除账号/);
+  assert.doesNotMatch(html, /保存账号/);
+  assert.doesNotMatch(html, /name="username" value="manager-a"/);
   assert.match(html, /data-action="delete-company" data-id="company-a"/);
   assert.doesNotMatch(html, /data-action="delete-company" data-id="default"/);
   assert.match(html, /删除前需先移除该公司的名片和账号权限关联/);

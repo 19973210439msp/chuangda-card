@@ -157,14 +157,6 @@ const store = {
     const data = await snapshot();
     return Array.isArray(data.admins) ? data.admins : [];
   },
-  async deleteAdmin(id) {
-    return mutate((data) => {
-      const before = (data.admins || []).length;
-      data.admins = (data.admins || []).filter((item) => item.id !== id);
-      data.sessions = (data.sessions || []).filter((session) => session.userId !== id);
-      return before !== data.admins.length;
-    });
-  },
   async listPeople({ kind } = {}) {
     const data = await snapshot();
     return data.people.filter((person) => matchKind(person, kind));

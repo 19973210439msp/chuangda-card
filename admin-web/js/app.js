@@ -444,23 +444,15 @@ function companiesHtml() {
     const admins = (state.companyAdmins || []).filter((admin) => admin.companyId === item.id);
     const accountManager = item.id === 'default'
       ? `<strong>${esc((state.admin && state.admin.username) || '总部管理员')}</strong><small>总部管理员账号</small>`
-      : `<details class="company-account-manager">
-          <summary>账号管理${admins.length ? `（${admins.length}）` : ''}</summary>
-          ${admins.map((admin) => `
+      : `<div class="company-account-manager">
+          ${admins.length ? admins.map((admin) => `
             <form data-form="company-admin" class="company-admin-form" autocomplete="off">
               <input type="hidden" name="id" value="${esc(admin.id)}">
-              <input type="hidden" name="companyId" value="${esc(item.id)}">
-              <label>账号<input name="username" value="${esc(admin.username)}" required maxlength="40"></label>
-              <label>新密码<input name="password" type="password" minlength="6" autocomplete="new-password" placeholder="不修改请留空"></label>
-              <div class="inline-actions"><button class="btn secondary small" type="submit">保存账号</button><button class="btn danger small" type="button" data-action="delete-company-admin" data-id="${esc(admin.id)}" data-name="${esc(admin.username)}">删除账号</button></div>
-            </form>`).join('')}
-          <form data-form="company-admin" class="company-admin-form" autocomplete="off">
-            <input type="hidden" name="companyId" value="${esc(item.id)}">
-            <label>新增账号<input name="username" required maxlength="40"></label>
-            <label>初始密码<input name="password" type="password" required minlength="6" autocomplete="new-password"></label>
-            <button class="btn secondary small" type="submit">新增管理员</button>
-          </form>
-        </details>`;
+              <strong>${esc(admin.username)}</strong>
+              <label>新密码<input name="password" type="password" required minlength="6" autocomplete="new-password" placeholder="至少 6 位"></label>
+              <button class="btn secondary small" type="submit">修改密码</button>
+            </form>`).join('') : '<span class="muted">暂无管理员账号</span>'}
+        </div>`;
     return `
     <tr>
       <td>${esc(item.name || '')}</td>
@@ -981,12 +973,11 @@ document.addEventListener('submit', async (event) => {
     }
     if (kind === 'company-admin') {
       const fields = formData(form);
-      const body = { username: fields.username, password: fields.password || '' };
-      await api(fields.id ? '/api/company-admins/' + encodeURIComponent(fields.id) : '/api/company-admins', {
-        method: fields.id ? 'PUT' : 'POST',
-        body: fields.id ? body : { ...body, companyId: fields.companyId },
+      await api('/api/company-admins/' + encodeURIComponent(fields.id), {
+        method: 'PUT',
+        body: { password: fields.password || '' },
       });
-      showNotice(fields.id ? '管理员账号已更新，原登录会话已退出' : '子公司管理员账号已创建');
+      showNotice('管理员密码已修改，原登录会话已退出');
       await loadView('companies');
       return;
     }
@@ -1131,13 +1122,6 @@ document.addEventListener('click', async (event) => {
       setToken('');
       location.hash = '#/login';
       renderLogin();
-      return;
-    }
-    if (action === 'delete-company-admin') {
-      if (!window.confirm('确定删除管理员账号「' + (button.dataset.name || '') + '」？该账号会立即退出后台。')) return;
-      await api('/api/company-admins/' + encodeURIComponent(id), { method: 'DELETE' });
-      showNotice('子公司管理员账号已删除');
-      await loadView('companies');
       return;
     }
     if (action === 'delete-company') {

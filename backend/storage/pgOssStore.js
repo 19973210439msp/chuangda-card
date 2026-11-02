@@ -281,21 +281,6 @@ const store = {
     const result = await query('SELECT data FROM admins ORDER BY username ASC');
     return result.rows.map((row) => row.data);
   },
-  async deleteAdmin(id) {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query('DELETE FROM sessions WHERE user_id = $1', [id]);
-      const removed = await client.query('DELETE FROM admins WHERE id = $1', [id]);
-      await client.query('COMMIT');
-      return removed.rowCount > 0;
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  },
   async listPeople({ kind } = {}) {
     const result = kind
       ? await query('SELECT data FROM people WHERE kind = $1 ORDER BY created_at ASC', [kind])

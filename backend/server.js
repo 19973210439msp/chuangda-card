@@ -586,28 +586,15 @@ app.put('/api/company-admins/:id', asyncRoute(async (req, res) => {
   if (adminOf(req).scope !== 'hq') throw httpError(403, 'FORBIDDEN', '只有总部管理员可以修改子公司管理员');
   const target = await store.getAdmin(text(req.params.id, 80));
   if (!target || target.scope !== 'company' || target.reviewOnly) throw httpError(404, 'NOT_FOUND', '子公司管理员不存在');
-  const username = text(req.body && req.body.username, 40) || target.username;
   const password = String((req.body && req.body.password) || '');
-  if (password && password.length < 6) throw httpError(400, 'VALIDATION_ERROR', '新密码至少 6 位');
-  const occupied = await store.findAdminByUsername(username);
-  if (occupied && occupied.id !== target.id) throw httpError(409, 'ADMIN_EXISTS', '这个管理员账号已存在');
+  if (password.length < 6) throw httpError(400, 'VALIDATION_ERROR', '新密码至少 6 位');
   const next = {
     ...target,
-    username,
-    ...(password ? { passwordHash: hashPassword(password) } : {}),
+    passwordHash: hashPassword(password),
   };
   await store.saveAdmin(next);
   await store.deleteSessionsForUser(next.id);
   res.json(publicCompanyAdmin(next));
-}));
-
-app.delete('/api/company-admins/:id', asyncRoute(async (req, res) => {
-  requireAdmin(req);
-  if (adminOf(req).scope !== 'hq') throw httpError(403, 'FORBIDDEN', '只有总部管理员可以删除子公司管理员');
-  const target = await store.getAdmin(text(req.params.id, 80));
-  if (!target || target.scope !== 'company' || target.reviewOnly) throw httpError(404, 'NOT_FOUND', '子公司管理员不存在');
-  await store.deleteAdmin(target.id);
-  res.json({ ok: true });
 }));
 
 app.get('/api/auth/options', asyncRoute(async (req, res) => {

@@ -999,7 +999,7 @@ test('company admin template visibility, ownership isolation and pinned share li
   assert.equal(retained.json.employee.cards[0].lifecycle, 'archived');
 });
 
-test('hq manages company admin accounts and safely deletes empty subsidiaries', async () => {
+test('hq resets a subsidiary manager password without changing its account name and safely deletes the subsidiary', async () => {
   const hq = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
   const hqToken = hq.json.token;
   const created = await api('/api/companies', {
@@ -1035,17 +1035,29 @@ test('hq manages company admin accounts and safely deletes empty subsidiaries', 
     body: { username: 'company-manager-updated', password: 'new-pass-1' },
   });
   assert.equal(updated.status, 200);
-  const subLogin = await api('/api/login', {
+  assert.equal(updated.json.username, 'company-manager-delete');
+  assert.equal((await api('/api/login', {
+    method: 'POST', body: { username: 'company-manager-delete', password: 'old-pass-1' },
+  })).status, 401);
+  assert.equal((await api('/api/login', {
     method: 'POST', body: { username: 'company-manager-updated', password: 'new-pass-1' },
+  })).status, 401);
+  const subLogin = await api('/api/login', {
+    method: 'POST', body: { username: 'company-manager-delete', password: 'new-pass-1' },
   });
   assert.equal(subLogin.status, 200);
+
+  const missingPassword = await api('/api/company-admins/' + adminCreated.json.id, {
+    method: 'PUT', token: hqToken, body: { username: 'ignored-name' },
+  });
+  assert.equal(missingPassword.status, 400);
 
   const removed = await api('/api/companies/' + companyId, { method: 'DELETE', token: hqToken });
   assert.equal(removed.status, 200, JSON.stringify(removed.json));
   assert.equal(removed.json.deletedAdmins, 1);
   assert.equal((await api('/api/me', { token: subLogin.json.token })).status, 401);
   assert.equal((await api('/api/login', {
-    method: 'POST', body: { username: 'company-manager-updated', password: 'new-pass-1' },
+    method: 'POST', body: { username: 'company-manager-delete', password: 'new-pass-1' },
   })).status, 401);
   assert.equal((await api('/api/companies', { token: hqToken })).json.items.some((item) => item.id === companyId), false);
   assert.equal((await api('/api/companies/default', { method: 'DELETE', token: hqToken })).status, 400);
