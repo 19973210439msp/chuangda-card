@@ -418,12 +418,17 @@ function certHtml() {
     <td>${esc(item.name || '未填写姓名')}<br><small>${esc(item.phone || '未绑定手机号')}</small></td>
     <td>${item.permission.level}级 · ${esc(item.permission.level === 3 ? '全企业' : item.permission.level === 2 ? (item.permission.companyIds || []).map((id) => (policy.companies || []).find((c) => c.id === id)?.name || id).join('、') : '仅查看、转发、切换')}</td>
     <td>${esc({ individual: '总部单独设置', company: '企业单独设置', default: '默认策略', ordinary: '普通权限' }[item.permission.source] || '')}</td>
-    <td>${item.locked ? '由总管理员管理' : `<form data-form="account-permission">
-      <input type="hidden" name="id" value="${esc(item.id)}">
-      ${permissionFields(item.permission, hq)}
-      <button class="btn small" type="submit">保存权限</button>
-      ${hq ? `<button class="btn secondary small" type="button" data-action="reset-card-permission" data-id="${esc(item.id)}">恢复默认</button>` : ''}
-    </form>`}</td></tr>`).join('');
+    <td>${item.locked ? '由总管理员管理' : `<details class="row-action-disclosure">
+      <summary>权限设置</summary>
+      <form data-form="account-permission" class="row-action-content">
+        <input type="hidden" name="id" value="${esc(item.id)}">
+        ${permissionFields(item.permission, hq)}
+        <div class="inline-actions">
+          <button class="btn small" type="submit">保存权限</button>
+          ${hq ? `<button class="btn secondary small" type="button" data-action="reset-card-permission" data-id="${esc(item.id)}">恢复默认</button>` : ''}
+        </div>
+      </form>
+    </details>`}</td></tr>`).join('');
   return shell('账号名片权限', `
     ${policyForm}
     <form class="panel" data-form="add-account-permission">
@@ -444,22 +449,31 @@ function companiesHtml() {
     const admins = (state.companyAdmins || []).filter((admin) => admin.companyId === item.id);
     const accountManager = item.id === 'default'
       ? `<strong>${esc((state.admin && state.admin.username) || '总部管理员')}</strong><small>总部管理员账号</small>`
-      : `<div class="company-account-manager">
-          ${admins.length ? admins.map((admin) => `
+      : admins.length
+        ? admins.map((admin) => `<strong>${esc(admin.username)}</strong>`).join('<br>')
+        : '<span class="muted">暂无管理员账号</span>';
+    const companyActions = item.id === 'default'
+      ? '<span class="muted">不可删除</span>'
+      : `<details class="row-action-disclosure company-account-manager">
+          <summary>管理</summary>
+          <div class="row-action-content">
+            ${admins.length ? admins.map((admin) => `
             <form data-form="company-admin" class="company-admin-form" autocomplete="off">
               <input type="hidden" name="id" value="${esc(admin.id)}">
-              <strong>${esc(admin.username)}</strong>
+              <strong>修改 ${esc(admin.username)} 的密码</strong>
               <label>新密码<input name="password" type="password" required minlength="6" autocomplete="new-password" placeholder="至少 6 位"></label>
               <button class="btn secondary small" type="submit">修改密码</button>
             </form>`).join('') : '<span class="muted">暂无管理员账号</span>'}
-        </div>`;
+            <button class="btn danger small" type="button" data-action="delete-company" data-id="${esc(item.id)}" data-name="${esc(item.name)}">删除子公司</button>
+          </div>
+        </details>`;
     return `
     <tr>
       <td>${esc(item.name || '')}</td>
       <td>${esc(item.shortName || '')}</td>
       <td>${item.id === 'default' ? '总部' : (item.reviewOnly ? '测试企业' : '子公司')}</td>
       <td>${accountManager}</td>
-      <td>${item.id === 'default' ? '<span class="muted">不可删除</span>' : `<button class="btn danger small" type="button" data-action="delete-company" data-id="${esc(item.id)}" data-name="${esc(item.name)}">删除子公司</button>`}</td>
+      <td>${companyActions}</td>
     </tr>`;
   }).join('');
   return shell('子公司', `

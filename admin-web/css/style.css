@@ -249,6 +249,11 @@ th, td { text-align: left; padding: 13px 12px; border-bottom: 1px solid var(--li
 .permission-companies legend { padding: 0 6px; color: var(--ink); font-size: 13px; font-weight: 600; }
 .permission-companies label { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 13px; }
 .permission-companies input { width: 16px; height: 16px; margin: 0; }
+.row-action-disclosure { min-width: 140px; }
+.row-action-disclosure > summary { width: max-content; cursor: pointer; color: var(--navy); font-weight: 700; }
+.row-action-disclosure > summary::marker { color: var(--red); }
+.row-action-content { display: grid; gap: 10px; margin-top: 10px; padding: 12px; border: 1px solid var(--line); background: #f7f9fc; }
+.row-action-content > label { margin: 0; }
 .company-account-manager { min-width: 220px; }
 .company-admin-form { display: grid; gap: 8px; }
 .company-admin-form + .company-admin-form { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
