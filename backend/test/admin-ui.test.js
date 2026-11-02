@@ -108,7 +108,7 @@ test('card management groups named, external, disabled and closed accounts and r
   const html = vm.runInContext(`
     state.admin = { scope: 'hq' };
     state.templates = [{ id: 'classic', name: '创大产控模板' }];
-    state.companyQuery = '创大';
+    state.query = '创大';
     state.employees = [
       { id: 'named', status: 'active', accountPhone: '13800000001', permission: { level: 1, companyIds: [] }, cards: [{ id: 'card-1', name: '张三', company: '创大公司', lifecycle: 'active' }] },
       { id: 'external', status: 'active', accountPhone: '13800000002', permission: { level: 2, companyIds: ['company-a'] }, cards: [] },
@@ -117,7 +117,9 @@ test('card management groups named, external, disabled and closed accounts and r
     ];
     cardsHtml();
   `, context);
-  assert.match(html, /name="company" value="创大"/);
+  assert.match(html, /name="q" value="创大"/);
+  assert.match(html, /placeholder="搜索姓名、账号手机号、名片电话、邮箱或公司"/);
+  assert.doesNotMatch(html, /name="company"|id="company-q"|搜索公司/);
   assert.match(html, /正常账号/);
   assert.match(html, /外部账号/);
   assert.match(html, /停用账号/);

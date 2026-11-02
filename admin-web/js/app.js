@@ -32,7 +32,6 @@ const state = {
   visitLimit: 50,
   visitFilter: { cardId: '', from: '', to: '' },
   query: '',
-  companyQuery: '',
   editing: null,
   error: '',
   notice: '',
@@ -363,9 +362,7 @@ function cardsHtml() {
     <div class="toolbar">
       <form class="search" data-form="search">
         <label class="skip" for="q">搜索账号或名片</label>
-        <input id="q" name="q" value="${esc(state.query)}" placeholder="搜索姓名、账号手机号、名片电话或邮箱">
-        <label class="skip" for="company-q">搜索公司</label>
-        <input id="company-q" name="company" value="${esc(state.companyQuery || '')}" placeholder="搜索公司">
+        <input id="q" name="q" value="${esc(state.query)}" placeholder="搜索姓名、账号手机号、名片电话、邮箱或公司">
         <button class="btn secondary" type="submit">搜索</button>
       </form>
       <button class="btn" type="button" data-action="create" ${noTemplates ? 'disabled title="当前企业没有可用模板"' : ''}>新建名片</button>
@@ -759,7 +756,7 @@ async function loadView(view) {
     state.permissionPolicy = policy;
   } else if (view === 'cards') {
     const [employees, companies] = await Promise.all([
-      api('/api/employees?q=' + encodeURIComponent(state.query) + '&company=' + encodeURIComponent(state.companyQuery || '')),
+      api('/api/employees?q=' + encodeURIComponent(state.query)),
       api('/api/companies').catch(() => ({ items: [] })),
     ]);
     state.employees = employees.items;
@@ -922,7 +919,6 @@ document.addEventListener('submit', async (event) => {
     if (kind === 'search') {
       const fields = formData(form);
       state.query = fields.q || '';
-      state.companyQuery = fields.company || '';
       await loadView('cards');
       return;
     }
