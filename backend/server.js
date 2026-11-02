@@ -460,6 +460,40 @@ function publicTemplate(template) {
   };
 }
 
+function publicCompanyAdmin(admin) {
+  return {
+    id: admin.id,
+    username: admin.username,
+    companyId: admin.companyId || '',
+    scope: admin.scope || 'company',
+  };
+}
+
+function removeCompanyFromRoot(root, companyId) {
+  const grants = Object.fromEntries(Object.entries((root && root.cardTemplateGrants) || {})
+    .map(([templateId, companyIds]) => [templateId, (companyIds || []).filter((id) => id !== companyId)]));
+  const templates = Array.isArray(root && root.cardTemplates)
+    ? root.cardTemplates.map((template) => ({
+      ...template,
+      companyIds: (template.companyIds || []).filter((id) => id !== companyId),
+    }))
+    : [];
+  const defaultPermission = root && root.defaultCardPermission;
+  const defaultCompanyIds = (defaultPermission && defaultPermission.companyIds || []).filter((id) => id !== companyId);
+  return {
+    ...root,
+    cardTemplateGrants: grants,
+    cardTemplates: templates,
+    ...(defaultPermission ? {
+      defaultCardPermission: {
+        ...defaultPermission,
+        level: defaultPermission.level === 2 && !defaultCompanyIds.length ? 1 : defaultPermission.level,
+        companyIds: defaultCompanyIds,
+      },
+    } : {}),
+  };
+}
+
 app.get('/api/companies', asyncRoute(async (req, res) => {
   requireAdmin(req);
   if (adminOf(req).scope !== 'hq') throw httpError(403, 'FORBIDDEN', '只有总部管理员可以查看全部公司');
@@ -484,6 +518,49 @@ app.post('/api/companies', asyncRoute(async (req, res) => {
   res.status(201).json({ id, company });
 }));
 
+app.delete('/api/companies/:id', asyncRoute(async (req, res) => {
+  requireAdmin(req);
+  if (adminOf(req).scope !== 'hq') throw httpError(403, 'FORBIDDEN', '只有总部管理员可以删除子公司');
+  const companyId = text(req.params.id, 40);
+  if (!companyId || companyId === 'default') throw httpError(400, 'VALIDATION_ERROR', '总部公司不能删除');
+  const company = await store.getCompany(companyId);
+  if (!company || !reviewCompanyVisible(company)) throw httpError(404, 'NOT_FOUND', '公司不存在');
+
+  const people = await store.listPeople({ kind: 'employee' });
+  const linkedCards = people.some((person) => (person.cards || []).some((card) => (
+    card.companyId === companyId && card.lifecycle !== 'deleted'
+  )));
+  const linkedPermissions = people.some((person) => (
+    !!(person.cardPermission && (person.cardPermission.companyIds || []).includes(companyId))
+    || person.companyCardPermissions && person.companyCardPermissions[companyId] === true
+  ));
+  if (linkedCards || linkedPermissions) {
+    throw httpError(409, 'COMPANY_IN_USE', '该公司仍有关联名片或账号权限，请先移除关联数据后再删除');
+  }
+
+  const removed = await store.deleteCompanyRecord(companyId);
+  if (!removed.ok) throw httpError(404, 'NOT_FOUND', '公司不存在');
+  const root = await store.getCompany('default');
+  if (root) await store.saveCompanyRecord('default', removeCompanyFromRoot(root, companyId));
+  await Promise.all(people.map(async (person) => {
+    if (!person.companyCardPermissions || !Object.prototype.hasOwnProperty.call(person.companyCardPermissions, companyId)) return;
+    const companyCardPermissions = { ...person.companyCardPermissions };
+    delete companyCardPermissions[companyId];
+    await store.updatePerson(person.id, { ...person, companyCardPermissions, updatedAt: nowIso() });
+  }));
+  res.json({ ok: true, deletedAdmins: removed.deletedAdmins || 0 });
+}));
+
+app.get('/api/company-admins', asyncRoute(async (req, res) => {
+  requireAdmin(req);
+  if (adminOf(req).scope !== 'hq') throw httpError(403, 'FORBIDDEN', '只有总部管理员可以管理子公司账号');
+  const visibleCompanyIds = new Set((await managedCompanies()).map((company) => company.id));
+  const items = (await store.listAdmins())
+    .filter((admin) => admin.scope === 'company' && visibleCompanyIds.has(admin.companyId) && !admin.reviewOnly)
+    .map(publicCompanyAdmin);
+  res.json({ items });
+}));
+
 app.post('/api/company-admins', asyncRoute(async (req, res) => {
   requireAdmin(req);
   if (adminOf(req).scope !== 'hq') throw httpError(403, 'FORBIDDEN', '只有总部管理员可以创建子公司管理员');
@@ -501,7 +578,36 @@ app.post('/api/company-admins', asyncRoute(async (req, res) => {
     scope: 'company',
   };
   await store.saveAdmin(admin);
-  res.status(201).json({ id: admin.id, username, companyId, scope: 'company' });
+  res.status(201).json(publicCompanyAdmin(admin));
+}));
+
+app.put('/api/company-admins/:id', asyncRoute(async (req, res) => {
+  requireAdmin(req);
+  if (adminOf(req).scope !== 'hq') throw httpError(403, 'FORBIDDEN', '只有总部管理员可以修改子公司管理员');
+  const target = await store.getAdmin(text(req.params.id, 80));
+  if (!target || target.scope !== 'company' || target.reviewOnly) throw httpError(404, 'NOT_FOUND', '子公司管理员不存在');
+  const username = text(req.body && req.body.username, 40) || target.username;
+  const password = String((req.body && req.body.password) || '');
+  if (password && password.length < 6) throw httpError(400, 'VALIDATION_ERROR', '新密码至少 6 位');
+  const occupied = await store.findAdminByUsername(username);
+  if (occupied && occupied.id !== target.id) throw httpError(409, 'ADMIN_EXISTS', '这个管理员账号已存在');
+  const next = {
+    ...target,
+    username,
+    ...(password ? { passwordHash: hashPassword(password) } : {}),
+  };
+  await store.saveAdmin(next);
+  await store.deleteSessionsForUser(next.id);
+  res.json(publicCompanyAdmin(next));
+}));
+
+app.delete('/api/company-admins/:id', asyncRoute(async (req, res) => {
+  requireAdmin(req);
+  if (adminOf(req).scope !== 'hq') throw httpError(403, 'FORBIDDEN', '只有总部管理员可以删除子公司管理员');
+  const target = await store.getAdmin(text(req.params.id, 80));
+  if (!target || target.scope !== 'company' || target.reviewOnly) throw httpError(404, 'NOT_FOUND', '子公司管理员不存在');
+  await store.deleteAdmin(target.id);
+  res.json({ ok: true });
 }));
 
 app.get('/api/auth/options', asyncRoute(async (req, res) => {

@@ -240,6 +240,27 @@ const store = {
     const result = await query('SELECT id, data FROM company_settings ORDER BY id ASC');
     return result.rows.map((row) => ({ id: row.id, ...(row.data || {}) }));
   },
+  async deleteCompanyRecord(id) {
+    if (!id || id === 'default') return { ok: false, deletedAdmins: 0 };
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const admins = await client.query("SELECT id FROM admins WHERE data->>'companyId' = $1", [id]);
+      const adminIds = admins.rows.map((row) => row.id);
+      if (adminIds.length) await client.query('DELETE FROM sessions WHERE user_id = ANY($1)', [adminIds]);
+      await client.query("DELETE FROM admins WHERE data->>'companyId' = $1", [id]);
+      await client.query('DELETE FROM card_applications WHERE company_id = $1', [id]);
+      await client.query('DELETE FROM company_certifications WHERE company_id = $1', [id]);
+      const removed = await client.query('DELETE FROM company_settings WHERE id = $1', [id]);
+      await client.query('COMMIT');
+      return { ok: removed.rowCount > 0, deletedAdmins: admins.rowCount };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
   async getAdmin(id) {
     const result = await query('SELECT data FROM admins WHERE id = $1', [id]);
     return result.rows[0] ? result.rows[0].data : null;
@@ -255,6 +276,25 @@ const store = {
       [admin.id, admin.username, JSON.stringify(admin)]
     );
     return admin;
+  },
+  async listAdmins() {
+    const result = await query('SELECT data FROM admins ORDER BY username ASC');
+    return result.rows.map((row) => row.data);
+  },
+  async deleteAdmin(id) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM sessions WHERE user_id = $1', [id]);
+      const removed = await client.query('DELETE FROM admins WHERE id = $1', [id]);
+      await client.query('COMMIT');
+      return removed.rowCount > 0;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   },
   async listPeople({ kind } = {}) {
     const result = kind

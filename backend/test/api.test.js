@@ -999,6 +999,78 @@ test('company admin template visibility, ownership isolation and pinned share li
   assert.equal(retained.json.employee.cards[0].lifecycle, 'archived');
 });
 
+test('hq manages company admin accounts and safely deletes empty subsidiaries', async () => {
+  const hq = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
+  const hqToken = hq.json.token;
+  const created = await api('/api/companies', {
+    method: 'POST', token: hqToken, body: { name: '待删除空公司', shortName: '空公司' },
+  });
+  const companyId = created.json.id;
+  const adminCreated = await api('/api/company-admins', {
+    method: 'POST', token: hqToken,
+    body: { companyId, username: 'company-manager-delete', password: 'old-pass-1' },
+  });
+  assert.equal(adminCreated.status, 201);
+
+  const listed = await api('/api/company-admins', { token: hqToken });
+  assert.equal(listed.status, 200);
+  const listedAdmin = listed.json.items.find((item) => item.id === adminCreated.json.id);
+  assert.deepEqual(listedAdmin, {
+    id: adminCreated.json.id,
+    username: 'company-manager-delete',
+    companyId,
+    scope: 'company',
+  });
+  assert.equal(Object.prototype.hasOwnProperty.call(listedAdmin, 'passwordHash'), false);
+
+  const forbiddenList = await api('/api/company-admins', {
+    token: (await api('/api/login', {
+      method: 'POST', body: { username: 'company-manager-delete', password: 'old-pass-1' },
+    })).json.token,
+  });
+  assert.equal(forbiddenList.status, 403);
+
+  const updated = await api('/api/company-admins/' + adminCreated.json.id, {
+    method: 'PUT', token: hqToken,
+    body: { username: 'company-manager-updated', password: 'new-pass-1' },
+  });
+  assert.equal(updated.status, 200);
+  const subLogin = await api('/api/login', {
+    method: 'POST', body: { username: 'company-manager-updated', password: 'new-pass-1' },
+  });
+  assert.equal(subLogin.status, 200);
+
+  const removed = await api('/api/companies/' + companyId, { method: 'DELETE', token: hqToken });
+  assert.equal(removed.status, 200, JSON.stringify(removed.json));
+  assert.equal(removed.json.deletedAdmins, 1);
+  assert.equal((await api('/api/me', { token: subLogin.json.token })).status, 401);
+  assert.equal((await api('/api/login', {
+    method: 'POST', body: { username: 'company-manager-updated', password: 'new-pass-1' },
+  })).status, 401);
+  assert.equal((await api('/api/companies', { token: hqToken })).json.items.some((item) => item.id === companyId), false);
+  assert.equal((await api('/api/companies/default', { method: 'DELETE', token: hqToken })).status, 400);
+});
+
+test('company deletion is blocked while employee cards still reference it', async () => {
+  const hq = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
+  const hqToken = hq.json.token;
+  const created = await api('/api/companies', {
+    method: 'POST', token: hqToken, body: { name: '有关联名片公司' },
+  });
+  const companyId = created.json.id;
+  assert.equal((await api('/api/templates/classic', {
+    method: 'PUT', token: hqToken, body: { companyIds: [companyId] },
+  })).status, 200);
+  assert.equal((await api('/api/employees', {
+    method: 'POST', token: hqToken,
+    body: { companyId, cardTemplate: 'classic', name: '关联员工', phone: '13999000001' },
+  })).status, 201);
+
+  const removed = await api('/api/companies/' + companyId, { method: 'DELETE', token: hqToken });
+  assert.equal(removed.status, 409);
+  assert.equal(removed.json.error.code, 'COMPANY_IN_USE');
+});
+
 test('verified phones stay on this wechat and switch without a new code', async () => {
   const wechat = await api('/api/auth/wechat', { method: 'POST', body: { code: 'dev:multi-phone' } });
   assert.equal(wechat.status, 200);

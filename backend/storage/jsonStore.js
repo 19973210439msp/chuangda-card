@@ -123,6 +123,19 @@ const store = {
     const companies = data.companies || { default: data.company };
     return Object.keys(companies).filter((id) => companies[id]).map((id) => ({ id, ...companies[id] }));
   },
+  async deleteCompanyRecord(id) {
+    return mutate((data) => {
+      if (!id || id === 'default' || !data.companies || !data.companies[id]) return { ok: false, deletedAdmins: 0 };
+      const removedAdmins = (data.admins || []).filter((item) => item.companyId === id);
+      const removedIds = new Set(removedAdmins.map((item) => item.id));
+      data.admins = (data.admins || []).filter((item) => item.companyId !== id);
+      data.sessions = (data.sessions || []).filter((session) => !removedIds.has(session.userId));
+      data.applications = (data.applications || []).filter((row) => row.companyId !== id);
+      data.certifications = (data.certifications || []).filter((row) => row.companyId !== id);
+      delete data.companies[id];
+      return { ok: true, deletedAdmins: removedAdmins.length };
+    });
+  },
   async getAdmin(id) {
     const data = await snapshot();
     return (data.admins || []).find((item) => item.id === id) || null;
@@ -138,6 +151,18 @@ const store = {
       if (index >= 0) data.admins[index] = admin;
       else data.admins.push(admin);
       return admin;
+    });
+  },
+  async listAdmins() {
+    const data = await snapshot();
+    return Array.isArray(data.admins) ? data.admins : [];
+  },
+  async deleteAdmin(id) {
+    return mutate((data) => {
+      const before = (data.admins || []).length;
+      data.admins = (data.admins || []).filter((item) => item.id !== id);
+      data.sessions = (data.sessions || []).filter((session) => session.userId !== id);
+      return before !== data.admins.length;
     });
   },
   async listPeople({ kind } = {}) {

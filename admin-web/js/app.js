@@ -39,6 +39,7 @@ const state = {
   importIssues: [],
   admin: null,
   companies: [],
+  companyAdmins: [],
   permissionAccounts: [],
   permissionPolicy: { companies: [], enabled: false },
   permissionQuery: '',
@@ -442,17 +443,42 @@ function certHtml() {
 }
 
 function companiesHtml() {
-  const rows = (state.companies || []).map((item) => `
+  const rows = (state.companies || []).map((item) => {
+    const admins = (state.companyAdmins || []).filter((admin) => admin.companyId === item.id);
+    const accountManager = item.id === 'default'
+      ? `<strong>${esc((state.admin && state.admin.username) || '总部管理员')}</strong><small>总部管理员账号</small>`
+      : `<details class="company-account-manager">
+          <summary>账号管理${admins.length ? `（${admins.length}）` : ''}</summary>
+          ${admins.map((admin) => `
+            <form data-form="company-admin" class="company-admin-form" autocomplete="off">
+              <input type="hidden" name="id" value="${esc(admin.id)}">
+              <input type="hidden" name="companyId" value="${esc(item.id)}">
+              <label>账号<input name="username" value="${esc(admin.username)}" required maxlength="40"></label>
+              <label>新密码<input name="password" type="password" minlength="6" autocomplete="new-password" placeholder="不修改请留空"></label>
+              <div class="inline-actions"><button class="btn secondary small" type="submit">保存账号</button><button class="btn danger small" type="button" data-action="delete-company-admin" data-id="${esc(admin.id)}" data-name="${esc(admin.username)}">删除账号</button></div>
+            </form>`).join('')}
+          <form data-form="company-admin" class="company-admin-form" autocomplete="off">
+            <input type="hidden" name="companyId" value="${esc(item.id)}">
+            <label>新增账号<input name="username" required maxlength="40"></label>
+            <label>初始密码<input name="password" type="password" required minlength="6" autocomplete="new-password"></label>
+            <button class="btn secondary small" type="submit">新增管理员</button>
+          </form>
+        </details>`;
+    return `
     <tr>
       <td>${esc(item.name || '')}</td>
       <td>${esc(item.shortName || '')}</td>
       <td>${item.id === 'default' ? '总部' : (item.reviewOnly ? '测试企业' : '子公司')}</td>
-    </tr>`).join('');
+      <td>${accountManager}</td>
+      <td>${item.id === 'default' ? '<span class="muted">不可删除</span>' : `<button class="btn danger small" type="button" data-action="delete-company" data-id="${esc(item.id)}" data-name="${esc(item.name)}">删除子公司</button>`}</td>
+    </tr>`;
+  }).join('');
   return shell('子公司', `
     <div class="panel table-wrap">
+      <p class="lede">删除前需先移除该公司的名片和账号权限关联；删除子公司时，其后台管理员账号会一并删除并退出登录。</p>
       <table>
-        <thead><tr><th>公司全称</th><th>简称</th><th>类型</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="3">还没有公司</td></tr>'}</tbody>
+        <thead><tr><th>公司全称</th><th>简称</th><th>类型</th><th>管理员账号</th><th>操作</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5">还没有公司</td></tr>'}</tbody>
       </table>
     </div>
     <form class="panel" data-form="company" autocomplete="off">
@@ -718,7 +744,12 @@ async function loadView(view) {
     state.employees = employees.items || [];
     state.companies = companies.items || [];
   } else if (view === 'companies') {
-    state.companies = (await api('/api/companies')).items || [];
+    const [companies, companyAdmins] = await Promise.all([
+      api('/api/companies'),
+      api('/api/company-admins'),
+    ]);
+    state.companies = companies.items || [];
+    state.companyAdmins = companyAdmins.items || [];
   } else if (view === 'cert') {
     const [accounts, policy] = await Promise.all([
       api('/api/account-permissions?q=' + encodeURIComponent(state.permissionQuery || '')),
@@ -952,6 +983,17 @@ document.addEventListener('submit', async (event) => {
       await loadView('companies');
       return;
     }
+    if (kind === 'company-admin') {
+      const fields = formData(form);
+      const body = { username: fields.username, password: fields.password || '' };
+      await api(fields.id ? '/api/company-admins/' + encodeURIComponent(fields.id) : '/api/company-admins', {
+        method: fields.id ? 'PUT' : 'POST',
+        body: fields.id ? body : { ...body, companyId: fields.companyId },
+      });
+      showNotice(fields.id ? '管理员账号已更新，原登录会话已退出' : '子公司管理员账号已创建');
+      await loadView('companies');
+      return;
+    }
     if (kind === 'brand') {
       state.company = (await api('/api/company', { method: 'PUT', body: formData(form) })).company;
       showNotice('品牌已更新');
@@ -1093,6 +1135,20 @@ document.addEventListener('click', async (event) => {
       setToken('');
       location.hash = '#/login';
       renderLogin();
+      return;
+    }
+    if (action === 'delete-company-admin') {
+      if (!window.confirm('确定删除管理员账号「' + (button.dataset.name || '') + '」？该账号会立即退出后台。')) return;
+      await api('/api/company-admins/' + encodeURIComponent(id), { method: 'DELETE' });
+      showNotice('子公司管理员账号已删除');
+      await loadView('companies');
+      return;
+    }
+    if (action === 'delete-company') {
+      if (!window.confirm('确定删除子公司「' + (button.dataset.name || '') + '」？其后台管理员账号会一并删除。此操作不可恢复。')) return;
+      await api('/api/companies/' + encodeURIComponent(id), { method: 'DELETE' });
+      showNotice('子公司及其管理员账号已删除');
+      await loadView('companies');
       return;
     }
     if (action === 'create') {

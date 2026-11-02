@@ -70,6 +70,33 @@ test('admin card management shows account-only users and separates account phone
   assert.equal(pasted[0].title, '产品经理');
 });
 
+test('hq subsidiary table includes account management and guarded company deletion', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../admin-web/js/app.js'), 'utf8');
+  const page = { innerHTML: '', querySelector: () => null };
+  const context = vm.createContext({
+    document: { querySelector: (selector) => selector === '#app' ? page : null, addEventListener: () => {} },
+    window: { addEventListener: () => {} }, location: { hash: '#/companies' }, token: () => '',
+  });
+  vm.runInContext(source, context);
+  const html = vm.runInContext(`
+    state.admin = { scope: 'hq', username: 'admin' };
+    state.companies = [
+      { id: 'default', name: '总部', shortName: '总部' },
+      { id: 'company-a', name: '子公司甲', shortName: '甲' },
+    ];
+    state.companyAdmins = [
+      { id: 'admin-a', username: 'manager-a', companyId: 'company-a', scope: 'company' },
+    ];
+    companiesHtml();
+  `, context);
+  assert.match(html, /账号管理/);
+  assert.match(html, /manager-a/);
+  assert.match(html, /data-form="company-admin"/);
+  assert.match(html, /data-action="delete-company" data-id="company-a"/);
+  assert.doesNotMatch(html, /data-action="delete-company" data-id="default"/);
+  assert.match(html, /删除前需先移除该公司的名片和账号权限关联/);
+});
+
 test('card management groups named, external, disabled and closed accounts and renumbers filtered accounts', () => {
   const source = fs.readFileSync(path.join(__dirname, '../../admin-web/js/app.js'), 'utf8');
   const page = { innerHTML: '', querySelector: () => null };
