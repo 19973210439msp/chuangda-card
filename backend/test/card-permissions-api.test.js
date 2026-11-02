@@ -23,12 +23,13 @@ const { app } = require('../server');
 let server;
 let base;
 
-async function api(pathname, { method = 'GET', token, body } = {}) {
+async function api(pathname, { method = 'GET', token, body, envVersion } = {}) {
   const response = await fetch(base + pathname, {
     method,
     headers: {
       ...(body ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: 'Bearer ' + token } : {}),
+      ...(envVersion ? { 'X-Miniprogram-Env-Version': envVersion } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -69,14 +70,20 @@ test('review entry is isolated, resettable and revoked as soon as its flag is di
   process.env.WECHAT_REVIEW_ENTRY_ENABLED = 'true';
   process.env.WECHAT_REVIEW_CODE_HASH = crypto.createHash('sha256').update('review-demo-code').digest('hex');
   try {
-    const options = await api('/api/auth/options');
+    assert.equal((await api('/api/auth/options')).json.reviewEntryEnabled, false);
+    assert.equal((await api('/api/auth/options', { envVersion: 'release' })).json.reviewEntryEnabled, false);
+    assert.equal((await api('/api/auth/review-login', {
+      method: 'POST', envVersion: 'release', body: { code: 'review-demo-code' },
+    })).status, 404);
+
+    const options = await api('/api/auth/options', { envVersion: 'trial' });
     assert.equal(options.json.reviewEntryEnabled, true);
     assert.equal((await api('/api/auth/review-login', {
-      method: 'POST', body: { code: 'wrong-code' },
+      method: 'POST', envVersion: 'trial', body: { code: 'wrong-code' },
     })).status, 401);
 
     const login = await api('/api/auth/review-login', {
-      method: 'POST', body: { code: 'review-demo-code' },
+      method: 'POST', envVersion: 'trial', body: { code: 'review-demo-code' },
     });
     assert.equal(login.status, 200);
     assert.equal(login.json.reviewEntry, true);
@@ -88,27 +95,27 @@ test('review entry is isolated, resettable and revoked as soon as its flag is di
     const reviewPersonId = login.json.employee.id;
     const initialCardId = login.json.employee.cards[0].id;
 
-    const me = await api('/api/employee/me', { token: reviewToken });
+    const me = await api('/api/employee/me', { token: reviewToken, envVersion: 'trial' });
     assert.equal(me.status, 200);
     assert.equal(me.json.reviewEntry, true);
     assert.equal(me.json.permission.level, 2);
     assert.deepEqual(me.json.permission.companyIds, ['wechat-review-demo']);
-    assert.equal((await api('/api/account/phones', { token: reviewToken })).status, 403);
+    assert.equal((await api('/api/account/phones', { token: reviewToken, envVersion: 'trial' })).status, 403);
     assert.equal((await api('/api/account/close', {
-      method: 'POST', token: reviewToken, body: {},
+      method: 'POST', token: reviewToken, envVersion: 'trial', body: {},
     })).status, 403);
 
     const shared = await api('/api/cards/' + reviewPersonId + '?shareCard=' + initialCardId);
     assert.equal(shared.status, 200);
     assert.equal(shared.json.card.activeCardId, initialCardId);
 
-    const templates = await api('/api/employee/templates', { token: reviewToken });
+    const templates = await api('/api/employee/templates', { token: reviewToken, envVersion: 'trial' });
     assert.equal(templates.status, 200);
     assert.deepEqual(templates.json.items.map((item) => item.id).sort(), ['classic']);
     assert.ok(templates.json.items.every((item) => item.companyId === 'wechat-review-demo'));
 
     const created = await api('/api/employee/cards', {
-      method: 'POST', token: reviewToken,
+      method: 'POST', token: reviewToken, envVersion: 'trial',
       body: { template: 'classic', companyId: 'wechat-review-demo' },
     });
     assert.equal(created.status, 201);
@@ -137,17 +144,19 @@ test('review entry is isolated, resettable and revoked as soon as its flag is di
       token: hq.json.token,
     })).status, 404);
 
+    assert.equal((await api('/api/employee/me', { token: reviewToken, envVersion: 'release' })).status, 401);
+
     const resetLogin = await api('/api/auth/review-login', {
-      method: 'POST', body: { code: 'review-demo-code' },
+      method: 'POST', envVersion: 'develop', body: { code: 'review-demo-code' },
     });
     assert.equal(resetLogin.status, 200);
     assert.equal(resetLogin.json.employee.cards.length, 1);
     assert.equal(resetLogin.json.employee.cards[0].template, 'classic');
-    assert.equal((await api('/api/employee/me', { token: reviewToken })).status, 401);
+    assert.equal((await api('/api/employee/me', { token: reviewToken, envVersion: 'trial' })).status, 401);
 
     process.env.WECHAT_REVIEW_ENTRY_ENABLED = 'false';
-    assert.equal((await api('/api/employee/me', { token: resetLogin.json.token })).status, 401);
-    assert.equal((await api('/api/auth/options')).json.reviewEntryEnabled, false);
+    assert.equal((await api('/api/employee/me', { token: resetLogin.json.token, envVersion: 'develop' })).status, 401);
+    assert.equal((await api('/api/auth/options', { envVersion: 'trial' })).json.reviewEntryEnabled, false);
   } finally {
     process.env.WECHAT_REVIEW_ENTRY_ENABLED = 'false';
     delete process.env.WECHAT_REVIEW_CODE_HASH;

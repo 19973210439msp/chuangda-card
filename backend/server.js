@@ -84,6 +84,15 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json({ limit: '1mb' }));
+function reviewClientEnvironmentAllowed(req) {
+  const value = String(req.headers['x-miniprogram-env-version'] || '').trim().toLowerCase();
+  return value === 'develop' || value === 'trial';
+}
+
+function reviewEntryAllowed(req) {
+  return config.reviewEntryEnabled() && reviewClientEnvironmentAllowed(req);
+}
+
 app.use(asyncRoute(async (req, res, next) => {
   await ready;
   next();
@@ -118,7 +127,7 @@ app.use(asyncRoute(async (req, res, next) => {
   if (session.role === 'employee') {
     const user = await store.getPerson(session.userId);
     if (isReviewEntryPerson(user) && (
-      !config.reviewEntryEnabled() || session.secretStamp !== config.reviewEntryCodeHash()
+      !reviewEntryAllowed(req) || session.secretStamp !== config.reviewEntryCodeHash()
     )) {
       await store.deleteSession(token);
       return next();
@@ -498,12 +507,12 @@ app.post('/api/company-admins', asyncRoute(async (req, res) => {
 app.get('/api/auth/options', asyncRoute(async (req, res) => {
   res.json({
     wechatSkip: config.wechatSkipAllowed(),
-    reviewEntryEnabled: config.reviewEntryEnabled(),
+    reviewEntryEnabled: reviewEntryAllowed(req),
   });
 }));
 
 app.post('/api/auth/review-login', asyncRoute(async (req, res) => {
-  if (!config.reviewEntryEnabled()) {
+  if (!reviewEntryAllowed(req)) {
     throw httpError(404, 'REVIEW_ENTRY_DISABLED', '审核体验入口未开启');
   }
   const ip = clientIp(req);

@@ -1,4 +1,5 @@
 var apiBaseUtil = require('./api-base.js');
+var runtimeEnv = require('./runtime-env.js');
 
 function getBase() {
   var app = typeof getApp === 'function' ? getApp() : null;
@@ -20,6 +21,7 @@ function requestOnce(base, { url, method = 'GET', data, redirectOnAuth = true, t
       enableQuic: false,
       header: {
         'Content-Type': 'application/json',
+        'X-Miniprogram-Env-Version': runtimeEnv.envVersion(),
         ...(token ? { Authorization: 'Bearer ' + token } : {}),
       },
       success(res) {
@@ -63,7 +65,10 @@ function uploadFile(filePath) {
       name: 'file',
       enableHttp2: false,
       enableQuic: false,
-      header: token ? { Authorization: 'Bearer ' + token } : {},
+      header: {
+        'X-Miniprogram-Env-Version': runtimeEnv.envVersion(),
+        ...(token ? { Authorization: 'Bearer ' + token } : {}),
+      },
       success(res) {
         let data = {};
         try { data = JSON.parse(res.data); } catch (err) { data = {}; }

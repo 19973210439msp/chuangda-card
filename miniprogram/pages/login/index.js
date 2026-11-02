@@ -3,6 +3,7 @@ const { pageScrollHeight } = require('../../utils/util');
 const accounts = require('../../utils/accounts');
 const { phoneAuthError, phoneCodeFromEvent } = require('../../utils/phone-auth');
 const { favoriteCompletion, favoritePayload, sharedCardPath, sharedEntryPath } = require('../../utils/favorite-flow');
+const { reviewEnvironmentAllowed } = require('../../utils/runtime-env');
 
 Page({
   data: {
@@ -42,7 +43,7 @@ Page({
     this.checking = true;
     request({ url: '/api/auth/options', redirectOnAuth: false, auth: false })
       .then((data) => {
-        const reviewEntryEnabled = !!data.reviewEntryEnabled;
+        const reviewEntryEnabled = reviewEnvironmentAllowed() && !!data.reviewEntryEnabled;
         // 即使测试可跳过，也不再自动进入；优先走手机号快捷登录，避免落到短信绑号页
         this.setData({
           wechatSkip: !!data.wechatSkip,
