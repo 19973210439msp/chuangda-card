@@ -4,8 +4,6 @@ const { text } = require('./validate');
 
 const BUILT_IN_TEMPLATES = [
   { id: 'classic', name: '创大产控模板' },
-  { id: 'horizon', name: '晴空模板' },
-  { id: 'wave', name: '蓝韵模板' },
 ];
 
 function listTemplates(company) {

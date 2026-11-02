@@ -16,6 +16,10 @@ const HEADER = {
   二维码: 'qr',
   公司: 'company',
   地址: 'address',
+  账户权限: 'permissionLevel',
+  账号权限: 'permissionLevel',
+  名片权限: 'permissionLevel',
+  权限: 'permissionLevel',
   name: 'name',
   title: 'title',
   phone: 'phone',
@@ -23,6 +27,7 @@ const HEADER = {
   qr: 'qr',
   company: 'company',
   address: 'address',
+  permissionLevel: 'permissionLevel',
 };
 
 function asText(value) {
@@ -140,7 +145,7 @@ async function rowsFromDocx(buffer) {
   const xml = await file.async('string');
   const tables = xml.match(/<w:tbl\b[\s\S]*?<\/w:tbl>/g) || [];
   if (!tables.length) {
-    const err = new Error('Word 里没有表格。请把员工信息做成表格，第一行写姓名、职业、手机号、邮箱、公司、地址');
+    const err = new Error('Word 里没有表格。请把员工信息做成表格，第一行写姓名、职业、手机号、邮箱、公司、地址、账户权限');
     err.code = 'DOCX_NO_TABLE';
     throw err;
   }

@@ -16,7 +16,7 @@ const { writeDefault, writeCard, writeCompanyTemplateCard, removeCard, archiveCa
 const { publicCardState } = require('./lib/cardAccess');
 const { canViewAdminCard, canEditAdminCard } = require('./lib/adminCardAccess');
 const { allTemplates, listTemplates, visibleTemplates, templateGrantedTo, setBuiltInAssignments, createTemplate, companyForTemplate } = require('./lib/templates');
-const { defaultPermissionEnabled, normalizePermission, effectivePermission, canManageCompany, assertManageCompany, canManageTemplate, assertManageTemplate, setPermission, mergePermissions } = require('./lib/cardPermissions');
+const { defaultPermissionEnabled, normalizePermission, importPermissionForAdmin, employeePermissionForAdmin, effectivePermission, canManageCompany, assertManageCompany, canManageTemplate, assertManageTemplate, setPermission, mergePermissions } = require('./lib/cardPermissions');
 const { migrateCardRecords } = require('./lib/cardMigration');
 const {
   text,
@@ -152,6 +152,14 @@ function matchesQuery(person, q) {
   return haystack.includes(String(q).trim().toLowerCase());
 }
 
+function matchesCompany(person, q) {
+  if (!q) return true;
+  const companies = [person.company, ...(person.cards || []).map((card) => card.company)]
+    .join('\n')
+    .toLowerCase();
+  return companies.includes(String(q).trim().toLowerCase());
+}
+
 function summaryOf(person, stats) {
   const row = stats || { views: 0, visitors: 0, avgDurationSec: 0, exchanges: 0 };
   return {
@@ -260,13 +268,20 @@ async function upsertImported(draft, options = {}) {
     const withCard = options.createNewCard
       ? addCard(next, cardTemplate, { ...cardFields, source: 'company_issued' })
       : writeCompanyTemplateCard(next, cardFields);
-    const saved = await store.updatePerson(target.id, withCard);
+    let prepared = withCard;
+    if (options.permission) {
+      try { prepared = setPermission(prepared, options.admin, options.permission); }
+      catch (err) {
+        if (!err || err.code !== 'FORBIDDEN') throw err;
+      }
+    }
+    const saved = await store.updatePerson(target.id, prepared);
 
     return { employee: saved, merged: true };
   }
   const id = 'emp-' + crypto.randomBytes(6).toString('hex');
   if (await store.getPerson(id)) throw httpError(409, 'EMPLOYEE_EXISTS', '名片编号已存在');
-  const person = writeCompanyTemplateCard({ ...draft, id, kind: 'employee', accountPhone, createdAt: nowIso(), cards: [] }, {
+  let person = writeCompanyTemplateCard({ ...draft, id, kind: 'employee', accountPhone, createdAt: nowIso(), cards: [] }, {
     name: draft.name,
     company: draft.company,
     title: draft.title,
@@ -278,6 +293,7 @@ async function upsertImported(draft, options = {}) {
     cardTemplate,
     templateName: draft.templateName || '',
   });
+  if (options.permission) person = setPermission(person, options.admin, options.permission);
   await store.insertPerson(person);
 
   return { employee: person, merged: false };
@@ -360,6 +376,13 @@ function employeeForAdmin(person, admin, root) {
   result.cards = result.cards.map((card) => ({ ...card, canAdminEdit: canEditAdminCard(root, admin, card) }));
   result.canManageAccount = !admin || admin.scope === 'hq';
   result.canRemoveCompanyCards = result.canManageAccount || result.cards.some((card) => card.canAdminEdit);
+  const permission = effectivePermission(person, root);
+  result.permission = !admin || admin.scope === 'hq' ? permission : {
+    level: canManageCompany(permission, admin.companyId) ? 2 : 1,
+    companyIds: canManageCompany(permission, admin.companyId) ? [admin.companyId] : [],
+    source: permission.source,
+  };
+  result.permissionLocked = !!(admin && admin.scope === 'company' && (person.cardPermission || permission.level === 3));
   if (admin && admin.scope === 'company' && !personRelatedToCompany(person, admin.companyId)) {
     result.authPhone = '';
     result.accountPhone = '';
@@ -738,13 +761,14 @@ app.delete('/api/templates/:id/assignment', asyncRoute(async (req, res) => {
 app.get('/api/employees', asyncRoute(async (req, res) => {
   requireAdmin(req);
   const q = req.query.q || '';
+  const company = req.query.company || '';
   const admin = adminOf(req);
   const people = await store.listPeople({ kind: 'employee' });
   const root = await store.getCompany('default');
   const items = people
     .filter((person) => !isReviewEntryPerson(person))
     .map((person) => employeeForAdmin(person, admin, root))
-    .filter((person) => person && matchesQuery(person, q));
+    .filter((person) => person && matchesQuery(person, q) && matchesCompany(person, company));
   res.json({ items });
 }));
 
@@ -766,7 +790,15 @@ app.post('/api/employees', asyncRoute(async (req, res) => {
   draft.cardTemplate = selectedTemplate.id;
   draft.templateName = selectedTemplate.name;
   assertStaffIdentity(draft);
-  const result = await upsertImported(draft, { createNewCard: true });
+  let permission;
+  if (req.body && req.body.permissionLevel !== undefined) {
+    permission = employeePermissionForAdmin(admin, {
+      level: Number(req.body.permissionLevel),
+      companyIds: Array.isArray(req.body.permissionCompanyIds) ? req.body.permissionCompanyIds : [],
+    }, companyId);
+    if (permission.level === 2) await validatePermissionCompanies(permission);
+  }
+  const result = await upsertImported(draft, { createNewCard: true, admin, permission });
   res.status(result.merged ? 200 : 201).json({
     employee: employeeForAdmin(result.employee, admin, await store.getCompany('default')),
     merged: result.merged,
@@ -799,6 +831,7 @@ async function importEmployeeList(list, res, options) {
       draft.templateName = selectedTemplate.name;
       draft.phone = normalizePhone(draft.phone);
       draft.accountPhone = draft.phone;
+      draft.importPermission = importPermissionForAdmin(options && options.admin, source.permissionLevel);
       if (!draft.phone) {
         rejected.push({ row, name: draft.name || '', reason: '缺少手机号，未创建' });
         return;
@@ -819,7 +852,12 @@ async function importEmployeeList(list, res, options) {
   });
   const saved = [];
   for (const draft of prepared) {
-    try { saved.push(await upsertImported(draft)); }
+    try {
+      saved.push(await upsertImported(draft, {
+        admin: options && options.admin,
+        permission: draft.importPermission,
+      }));
+    }
     catch (err) { rejected.push({ row: draft.importRow, name: draft.name || '', reason: err.message }); }
   }
   const admin = options && options.admin;
@@ -973,6 +1011,14 @@ app.put('/api/employees/:id', asyncRoute(async (req, res) => {
   if (touchesCard) {
     stored = cardId ? writeCard(next, cardId, fields) : writeDefault(next, fields);
     if (!stored) throw httpError(404, 'NOT_FOUND', '名片不存在');
+  }
+  if (body.permissionLevel !== undefined) {
+    const permission = employeePermissionForAdmin(admin, {
+      level: Number(body.permissionLevel),
+      companyIds: Array.isArray(body.permissionCompanyIds) ? body.permissionCompanyIds : [],
+    }, targetCard && targetCard.companyId);
+    if (permission.level === 2) await validatePermissionCompanies(permission);
+    stored = setPermission(stored, admin, permission);
   }
   const saved = await store.updatePerson(person.id, stored);
   const visible = employeeForAdmin(saved, admin, root);

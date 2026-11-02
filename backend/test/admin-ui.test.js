@@ -70,6 +70,60 @@ test('admin card management shows account-only users and separates account phone
   assert.equal(pasted[0].title, '产品经理');
 });
 
+test('card management groups named, external, disabled and closed accounts and renumbers filtered accounts', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../admin-web/js/app.js'), 'utf8');
+  const page = { innerHTML: '', querySelector: () => null };
+  const context = vm.createContext({
+    document: { querySelector: (selector) => selector === '#app' ? page : null, addEventListener: () => {} },
+    window: { addEventListener: () => {} }, location: { hash: '#/cards' }, token: () => '',
+  });
+  vm.runInContext(source, context);
+  const html = vm.runInContext(`
+    state.admin = { scope: 'hq' };
+    state.templates = [{ id: 'classic', name: '创大产控模板' }];
+    state.companyQuery = '创大';
+    state.employees = [
+      { id: 'named', status: 'active', accountPhone: '13800000001', permission: { level: 1, companyIds: [] }, cards: [{ id: 'card-1', name: '张三', company: '创大公司', lifecycle: 'active' }] },
+      { id: 'external', status: 'active', accountPhone: '13800000002', permission: { level: 2, companyIds: ['company-a'] }, cards: [] },
+      { id: 'disabled', status: 'disabled', accountPhone: '13800000003', permission: { level: 1, companyIds: [] }, cards: [{ id: 'card-3', name: '李四', company: '创大公司', lifecycle: 'active' }] },
+      { id: 'closed', status: 'closed', accountPhone: '13800000004', cards: [] },
+    ];
+    cardsHtml();
+  `, context);
+  assert.match(html, /name="company" value="创大"/);
+  assert.match(html, /正常账号/);
+  assert.match(html, /外部账号/);
+  assert.match(html, /停用账号/);
+  assert.match(html, /已注销账号/);
+  assert.match(html, /data-label="序号">1<\/td>/);
+  assert.match(html, /二级/);
+  assert.doesNotMatch(html, /data-label="序号">2<\/td>[\s\S]*data-account="named"/);
+});
+
+test('new and existing card dialogs edit one shared account permission', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../admin-web/js/app.js'), 'utf8');
+  const page = { innerHTML: '', querySelector: () => null };
+  const context = vm.createContext({
+    document: { querySelector: (selector) => selector === '#app' ? page : null, addEventListener: () => {} },
+    window: { addEventListener: () => {} }, location: { hash: '#/cards' }, token: () => '',
+  });
+  vm.runInContext(source, context);
+  vm.runInContext(`
+    state.admin = { scope: 'hq' };
+    state.companies = [{ id: 'default', name: '总部' }, { id: 'company-a', name: '甲公司' }];
+    state.templates = [{ id: 'classic', name: '创大产控模板' }];
+  `, context);
+  const created = vm.runInContext("employeeDialog({ status: 'active', companyId: 'default', cardTemplate: 'classic', permission: { level: 1, companyIds: [] } })", context);
+  assert.match(created, /name="permissionLevel"/);
+  assert.match(created, /三级 · 全企业名片权限/);
+  const edited = vm.runInContext("employeeDialog({ id: 'person-1', accountPhone: '13800000001', permission: { level: 2, companyIds: ['company-a'] }, cards: [] })", context);
+  assert.match(edited, /所有名片共用这一项账号权限/);
+  assert.match(edited, /value="company-a" checked/);
+  vm.runInContext("state.admin = { scope: 'company', companyId: 'company-a' }", context);
+  const sub = vm.runInContext("employeeDialog({ id: 'person-1', permission: { level: 2, companyIds: ['company-a'] }, cards: [] })", context);
+  assert.doesNotMatch(sub, /value="3"/);
+});
+
 test('shared template cards are clearly read-only and hide account mutations from company admins', () => {
   const source = fs.readFileSync(path.join(__dirname, '../../admin-web/js/app.js'), 'utf8');
   const page = { innerHTML: '', querySelector: () => null };

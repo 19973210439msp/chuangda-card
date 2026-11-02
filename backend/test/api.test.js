@@ -592,7 +592,7 @@ test('admin update rejects a zero-card employee instead of reporting a false sav
 
 test('hq new-card action appends a card even when the company and template repeat', async () => {
   const admin = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
-  const templates = ['classic', 'horizon', 'classic'];
+  const templates = ['classic', 'classic', 'classic'];
   let latest;
   for (let index = 0; index < templates.length; index += 1) {
     latest = await api('/api/employees', {
@@ -797,6 +797,12 @@ test('company admin template visibility, ownership isolation and pinned share li
   assert.equal(subLogin.status, 200);
   assert.equal(subLogin.json.scope, 'company');
   const subToken = subLogin.json.token;
+  const hqTemplate = await api('/api/templates', {
+    method: 'POST', token: hqToken,
+    body: { name: '总部专用模板', companyName: '总部专用', companyIds: ['default'] },
+  });
+  assert.equal(hqTemplate.status, 201);
+  const hqTemplateId = hqTemplate.json.template.id;
 
   const ownCompany = await api('/api/company', { token: subToken });
   assert.equal(ownCompany.status, 200);
@@ -837,7 +843,7 @@ test('company admin template visibility, ownership isolation and pinned share li
   const hqOnly = await api('/api/employees', {
     method: 'POST',
     token: hqToken,
-    body: { name: '仅总部', phone: '13911110001', title: '经理', cardTemplate: 'wave' },
+    body: { name: '仅总部', phone: '13911110001', title: '经理', cardTemplate: hqTemplateId },
   });
   assert.equal(hqOnly.status, 201);
   const hqOnlyId = hqOnly.json.employee.id;
@@ -845,7 +851,7 @@ test('company admin template visibility, ownership isolation and pinned share li
   const both = await api('/api/employees', {
     method: 'POST',
     token: hqToken,
-    body: { name: '总部名片', phone: '13911110002', title: '顾问', company: '总部', cardTemplate: 'wave' },
+    body: { name: '总部名片', phone: '13911110002', title: '顾问', company: '总部', cardTemplate: hqTemplateId },
   });
   assert.equal(both.status, 201);
   const personId = both.json.employee.id;
@@ -862,7 +868,7 @@ test('company admin template visibility, ownership isolation and pinned share li
   assert.equal(imported.status, 201);
   assert.equal((await api('/api/employees/batch', {
     method: 'POST', token: subToken,
-    body: { cardTemplate: 'wave', list: [{ name: '越权模板', phone: '13911110003' }] },
+    body: { cardTemplate: hqTemplateId, list: [{ name: '越权模板', phone: '13911110003' }] },
   })).status, 403);
   assert.equal(imported.json.items[0].cards.every((card) => card.companyId === companyId), true);
   const importedCard = imported.json.items[0].cards.find((card) => card.companyId === companyId);
@@ -1122,12 +1128,12 @@ test('ordinary accounts require an explicit grant and demotion preserves issued 
     assert.equal(row.phone, '13900139876');
     assert.equal((await api('/api/employee/cards', { method: 'POST', token, body: { template: 'classic', companyId: 'default' } })).status, 403);
     assert.equal((await api('/api/employee/me', { method: 'PUT', token, body: { companyId: 'default' } })).status, 403);
-    assert.equal((await api('/api/employee/me', { method: 'PUT', token, body: { cardTemplate: 'wave' } })).status, 403);
+    assert.equal((await api('/api/employee/me', { method: 'PUT', token, body: { cardTemplate: 'wave' } })).status, 400);
     await api('/api/account-permissions/' + personId, { method: 'PUT', token: hq.json.token, body: { level: 1 } });
     assert.equal((await api('/api/cards/' + personId + '?shareCard=' + cardId)).status, 200);
     assert.equal((await api('/api/employee/me', { method: 'PUT', token, body: { title: '旧页面保存' } })).status, 403);
     await api('/api/account-permissions/' + personId, { method: 'PUT', token: hq.json.token, body: { level: 3 } });
-    const another = await api('/api/employee/cards', { method: 'POST', token, body: { template: 'wave', companyId } });
+    const another = await api('/api/employee/cards', { method: 'POST', token, body: { template: 'classic', companyId } });
     assert.equal(another.status, 201);
     const addedId = another.json.employee.activeCardId;
     assert.equal((await api('/api/employees', { token })).status, 403);
@@ -1376,7 +1382,7 @@ test('hq can find an employee by an inactive card and receives every card', asyn
   const firstCardId = first.json.employee.activeCardId;
   await api('/api/employee/me', { method: 'PUT', token, body: { name: '总部默认名片' } });
   const added = await api('/api/employee/cards', {
-    method: 'POST', token, body: { template: 'horizon', companyId: 'default' },
+    method: 'POST', token, body: { template: 'classic', companyId: 'default' },
   });
   assert.equal(added.status, 201);
   assert.equal((await api('/api/employee/me', {
@@ -1400,20 +1406,20 @@ test('holder pins one employee card and hides it after owner soft-deletes it', a
   const first = await api('/api/employee/cards', { method: 'POST', token: targetToken, body: { template: 'classic', companyId: 'default' } });
   assert.equal(first.status, 201);
   const firstCardId = first.json.employee.activeCardId;
-  const second = await api('/api/employee/cards', { method: 'POST', token: targetToken, body: { template: 'horizon', companyId: 'default' } });
+  const second = await api('/api/employee/cards', { method: 'POST', token: targetToken, body: { template: 'classic', companyId: 'default' } });
   assert.equal(second.status, 201);
   const secondCardId = second.json.employee.activeCardId;
   await api('/api/employee/me', { method: 'PUT', token: targetToken, body: { name: '收藏测试第二张' } });
   const viewer = await api('/api/auth/wechat', { method: 'POST', body: { code: 'dev:holder-pinned-viewer' } });
   const saved = await api('/api/holder', { method: 'POST', token: viewer.json.token, body: { cardId: target.json.employee.id, shareCardId: secondCardId } });
   assert.equal(saved.status, 201);
-  assert.equal(saved.json.item.card.cardTemplate, 'horizon');
+  assert.equal(saved.json.item.card.cardTemplate, 'classic');
   await api('/api/employee/cards/active', { method: 'PUT', token: targetToken, body: { cardId: firstCardId } });
   const pinned = await api('/api/holder', { token: viewer.json.token });
   const pinnedCard = pinned.json.items.find((item) => item.cardId === target.json.employee.id);
   assert.equal(pinnedCard.shareCardId, secondCardId);
   assert.equal(pinnedCard.card.name, '收藏测试第二张');
-  assert.equal(pinnedCard.card.cardTemplate, 'horizon');
+  assert.equal(pinnedCard.card.cardTemplate, 'classic');
   assert.equal((await api('/api/employee/cards/' + secondCardId, { method: 'DELETE', token: targetToken })).status, 200);
   const revokedShared = await api('/api/cards/' + target.json.employee.id + '?shareCard=' + encodeURIComponent(secondCardId));
   assert.equal(revokedShared.status, 404);

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { effectivePermission, canManageCompany, setPermission } = require('../lib/cardPermissions');
+const { effectivePermission, canManageCompany, setPermission, importPermissionForAdmin } = require('../lib/cardPermissions');
 
 test('default policy covers every account and the flag disables only defaults', () => {
   const root = { defaultCardPermission: { level: 3, companyIds: [] } };
@@ -35,4 +35,17 @@ test('explicit ordinary permission survives default upgrades and reset follows d
   assert.throws(() => setPermission(person, { scope: 'company', companyId: 'a' }, { level: 2 }));
   const reset = setPermission(person, { scope: 'hq' }, { level: null });
   assert.equal(effectivePermission(reset, root, true).level, 3);
+});
+
+test('batch import permission is downgraded to what the importing administrator can grant', () => {
+  const hq = { scope: 'hq' };
+  const company = { scope: 'company', companyId: 'company-a' };
+
+  assert.deepEqual(importPermissionForAdmin(hq, ''), { level: 1, companyIds: [] });
+  assert.deepEqual(importPermissionForAdmin(hq, '一级'), { level: 1, companyIds: [] });
+  assert.deepEqual(importPermissionForAdmin(hq, '2级'), { level: 3, companyIds: [] });
+  assert.deepEqual(importPermissionForAdmin(hq, 3), { level: 3, companyIds: [] });
+  assert.deepEqual(importPermissionForAdmin(company, '二级'), { level: 2, companyIds: ['company-a'] });
+  assert.deepEqual(importPermissionForAdmin(company, '三级'), { level: 1, companyIds: [] });
+  assert.deepEqual(importPermissionForAdmin(company, '未知'), { level: 1, companyIds: [] });
 });

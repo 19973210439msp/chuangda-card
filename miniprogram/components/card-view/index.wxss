@@ -106,7 +106,7 @@
 .seal {
   width: 112rpx;
   height: 112rpx;
-  margin: 0 0 0 14rpx;
+  margin: 0 0 0 8rpx;
   flex-shrink: 0;
   border-radius: 50%;
   overflow: hidden;

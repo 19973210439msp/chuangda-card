@@ -43,6 +43,11 @@ test('card layouts prefer the template brand over the editable card company fiel
   assert.doesNotMatch(markup, /\{\{card\.company \|\| company\.name\}\}/);
 });
 
+test('classic card logo receives only a slight left alignment correction', () => {
+  const css = fs.readFileSync(path.join(__dirname, '../components/card-view/index.wxss'), 'utf8');
+  assert.match(css, /\.seal\s*\{[\s\S]*margin:\s*0 0 0 8rpx;/);
+});
+
 function readyPage(request) {
   const harness = loadPage('switch.js', request);
   Object.assign(harness.page.data, {

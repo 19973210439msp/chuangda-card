@@ -104,12 +104,12 @@ test('review entry is isolated, resettable and revoked as soon as its flag is di
 
     const templates = await api('/api/employee/templates', { token: reviewToken });
     assert.equal(templates.status, 200);
-    assert.deepEqual(templates.json.items.map((item) => item.id).sort(), ['classic', 'horizon', 'wave']);
+    assert.deepEqual(templates.json.items.map((item) => item.id).sort(), ['classic']);
     assert.ok(templates.json.items.every((item) => item.companyId === 'wechat-review-demo'));
 
     const created = await api('/api/employee/cards', {
       method: 'POST', token: reviewToken,
-      body: { template: 'horizon', companyId: 'wechat-review-demo' },
+      body: { template: 'classic', companyId: 'wechat-review-demo' },
     });
     assert.equal(created.status, 201);
     assert.equal(created.json.employee.cards.length, 2);
@@ -154,7 +154,7 @@ test('review entry is isolated, resettable and revoked as soon as its flag is di
   }
 });
 
-test('policy applies to registered, manually created and imported accounts and explicit ordinary overrides it', async () => {
+test('policy applies to inherited accounts while imports without a permission column stay explicitly ordinary', async () => {
   const hq = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
   const token = hq.json.token;
   const registered = await api('/api/auth/wechat', { method: 'POST', body: { code: 'dev:policy-new', phoneCode: 'dev:13950100001' } });
@@ -168,7 +168,9 @@ test('policy applies to registered, manually created and imported accounts and e
   for (const user of users) assert.equal((await api('/api/employee/me', { token: user.json.token })).json.permission.level, 1);
   process.env.MINIPROGRAM_DEFAULT_CARD_PERMISSION_ENABLED = 'true';
   assert.equal((await api('/api/card-permission-policy', { method: 'PUT', token, body: { level: 3 } })).status, 200);
-  for (const user of users) assert.equal((await api('/api/employee/me', { token: user.json.token })).json.permission.level, 3);
+  assert.equal((await api('/api/employee/me', { token: registered.json.token })).json.permission.level, 3);
+  assert.equal((await api('/api/employee/me', { token: manualLogin.json.token })).json.permission.level, 3);
+  assert.equal((await api('/api/employee/me', { token: importLogin.json.token })).json.permission.level, 1);
   await api('/api/account-permissions/' + registered.json.employee.id, { method: 'PUT', token, body: { level: 1 } });
   assert.equal((await api('/api/employee/me', { token: registered.json.token })).json.permission.level, 1);
   process.env.MINIPROGRAM_DEFAULT_CARD_PERMISSION_ENABLED = 'false';
@@ -191,11 +193,11 @@ test('two company admins grant independently and cannot grant global access or e
   await api('/api/templates/classic', {
     method: 'PUT', token: hqToken, body: { companyIds },
   });
-  await api('/api/templates/horizon', {
-    method: 'PUT', token: hqToken, body: { companyIds: [companyIds[0]] },
+  const templateA = await api('/api/templates', {
+    method: 'POST', token: hqToken, body: { name: '权限企业A模板', companyIds: [companyIds[0]] },
   });
-  await api('/api/templates/wave', {
-    method: 'PUT', token: hqToken, body: { companyIds: [companyIds[1]] },
+  const templateB = await api('/api/templates', {
+    method: 'POST', token: hqToken, body: { name: '权限企业B模板', companyIds: [companyIds[1]] },
   });
   const user = await api('/api/auth/wechat', { method: 'POST', body: { code: 'dev:company-multi', phoneCode: 'dev:13950200001' } });
   const id = user.json.employee.id;
@@ -205,13 +207,13 @@ test('two company admins grant independently and cannot grant global access or e
   }
   assert.deepEqual((await api('/api/employee/me', { token: user.json.token })).json.permission.companyIds.sort(), [...companyIds].sort());
   const templates = await api('/api/employee/templates', { token: user.json.token });
-  assert.deepEqual(templates.json.items.map((item) => item.id).sort(), ['classic', 'horizon', 'wave']);
+  assert.deepEqual(templates.json.items.map((item) => item.id).sort(), ['classic', templateA.json.template.id, templateB.json.template.id].sort());
   assert.equal(new Set(templates.json.items.map((item) => item.id)).size, 3);
   assert.deepEqual(templates.json.items.find((item) => item.id === 'classic').companyOptions
     .map((item) => item.companyId).sort(), [...companyIds].sort());
-  assert.deepEqual(templates.json.items.find((item) => item.id === 'horizon').companyOptions
+  assert.deepEqual(templates.json.items.find((item) => item.id === templateA.json.template.id).companyOptions
     .map((item) => item.companyId), [companyIds[0]]);
-  assert.deepEqual(templates.json.items.find((item) => item.id === 'wave').companyOptions
+  assert.deepEqual(templates.json.items.find((item) => item.id === templateB.json.template.id).companyOptions
     .map((item) => item.companyId), [companyIds[1]]);
   assert.equal((await api('/api/account-permissions/' + id, { method: 'PUT', token: admins[0], body: { level: 3 } })).status, 403);
   assert.equal((await api('/api/account-permissions/' + id, { method: 'PUT', token: admins[0], body: { level: 2, companyIds: [companyIds[1]] } })).status, 403);
@@ -374,6 +376,11 @@ test('company admins keep seeing related accounts with zero or archived cards', 
   const sub = await api('/api/login', {
     method: 'POST', body: { username: 'history-admin', password: 'history-pass' },
   });
+  const hqOnlyTemplate = await api('/api/templates', {
+    method: 'POST', token: hq.json.token,
+    body: { name: '历史测试总部模板', companyName: '总部私有品牌', companyIds: ['default'] },
+  });
+  assert.equal(hqOnlyTemplate.status, 201);
   const assigned = await api('/api/account-permissions', {
     method: 'POST', token: sub.json.token,
     body: { phone: '13950600004', level: 2 },
@@ -389,7 +396,7 @@ test('company admins keep seeing related accounts with zero or archived cards', 
     method: 'POST', token: hq.json.token,
     body: {
       name: '其他企业私有姓名', accountPhone: '13950600007', phone: '13850600007',
-      cardTemplate: 'wave', companyId: 'default',
+      cardTemplate: hqOnlyTemplate.json.template.id, companyId: 'default',
     },
   });
   assert.equal(otherCompanyCard.status, 201);
@@ -660,12 +667,6 @@ test('level-two templates are the deduplicated union of every granted company', 
   assert.equal((await api('/api/templates/classic', {
     method: 'PUT', token: hqToken, body: { companyIds: created },
   })).status, 200);
-  assert.equal((await api('/api/templates/horizon', {
-    method: 'PUT', token: hqToken, body: { companyIds: [created[0]] },
-  })).status, 200);
-  assert.equal((await api('/api/templates/wave', {
-    method: 'PUT', token: hqToken, body: { companyIds: [created[1]] },
-  })).status, 200);
   const user = await api('/api/auth/wechat', {
     method: 'POST', body: { code: 'dev:level2-union', phoneCode: 'dev:13950900011' },
   });
@@ -677,18 +678,80 @@ test('level-two templates are the deduplicated union of every granted company', 
   const available = await api('/api/employee/templates', { token });
   assert.equal(available.status, 200);
   const ids = available.json.items.map((item) => item.id);
-  assert.deepEqual(ids.slice().sort(), ['classic', 'horizon', 'wave']);
+  assert.deepEqual(ids.slice().sort(), ['classic']);
   assert.equal(new Set(ids).size, ids.length);
   assert.deepEqual(
     available.json.items.find((item) => item.id === 'classic').companyOptions.map((option) => option.companyId).sort(),
     created.slice().sort(),
   );
-  assert.deepEqual(
-    available.json.items.find((item) => item.id === 'horizon').companyOptions.map((option) => option.companyId),
-    [created[0]],
-  );
-  assert.deepEqual(
-    available.json.items.find((item) => item.id === 'wave').companyOptions.map((option) => option.companyId),
-    [created[1]],
-  );
+});
+
+test('manual card saves and batch imports apply one account-wide permission with administrator limits', async () => {
+  process.env.MINIPROGRAM_DEFAULT_CARD_PERMISSION_ENABLED = 'false';
+  const hq = await api('/api/login', { method: 'POST', body: { username: 'admin', password: 'admin123' } });
+  const hqToken = hq.json.token;
+  const company = await api('/api/companies', {
+    method: 'POST', token: hqToken, body: { name: '权限导入企业' },
+  });
+  const companyId = company.json.id;
+  await api('/api/templates/classic', {
+    method: 'PUT', token: hqToken, body: { companyIds: [companyId] },
+  });
+  await api('/api/company-admins', {
+    method: 'POST', token: hqToken,
+    body: { companyId, username: 'permission-import-admin', password: 'permission-import-pass' },
+  });
+  const sub = await api('/api/login', {
+    method: 'POST', body: { username: 'permission-import-admin', password: 'permission-import-pass' },
+  });
+
+  const manual = await api('/api/employees', {
+    method: 'POST', token: hqToken,
+    body: {
+      name: '手工三级账号', accountPhone: '13950910001', phone: '13850910001',
+      companyId: 'default', cardTemplate: 'classic', permissionLevel: 3,
+    },
+  });
+  assert.equal(manual.status, 201);
+  assert.equal(manual.json.employee.permission.level, 3);
+  const cardId = manual.json.employee.activeCardId;
+  const demoted = await api('/api/employees/' + manual.json.employee.id, {
+    method: 'PUT', token: hqToken,
+    body: { cardId, permissionLevel: 1 },
+  });
+  assert.equal(demoted.status, 200);
+  assert.equal(demoted.json.employee.permission.level, 1);
+
+  const hqImport = await api('/api/employees/batch', {
+    method: 'POST', token: hqToken,
+    body: {
+      companyId: 'default', cardTemplate: 'classic',
+      list: [
+        { name: '总部导入二级', phone: '13950910002', permissionLevel: '二级' },
+        { name: '总部导入三级', phone: '13950910003', permissionLevel: '三级' },
+        { name: '总部导入默认', phone: '13950910004' },
+      ],
+    },
+  });
+  assert.equal(hqImport.status, 201);
+  assert.deepEqual(hqImport.json.items.map((item) => item.permission.level), [3, 3, 1]);
+
+  const subImport = await api('/api/employees/batch', {
+    method: 'POST', token: sub.json.token,
+    body: {
+      cardTemplate: 'classic',
+      list: [
+        { name: '子管导入二级', phone: '13950910005', permissionLevel: '二级' },
+        { name: '子管导入三级', phone: '13950910006', permissionLevel: '三级' },
+        { name: '子管导入默认', phone: '13950910007' },
+      ],
+    },
+  });
+  assert.equal(subImport.status, 201);
+  assert.deepEqual(subImport.json.items.map((item) => item.permission.level), [2, 1, 1]);
+  assert.deepEqual(subImport.json.items[0].permission.companyIds, [companyId]);
+  const companyFiltered = await api('/api/employees?company=' + encodeURIComponent('权限导入企业'), { token: hqToken });
+  assert.equal(companyFiltered.status, 200);
+  assert.equal(companyFiltered.json.items.some((item) => item.id === subImport.json.items[0].id), true);
+  assert.equal((await api('/api/employees?company=' + encodeURIComponent('不存在的公司'), { token: hqToken })).json.items.length, 0);
 });

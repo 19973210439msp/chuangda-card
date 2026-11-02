@@ -14,6 +14,38 @@ function normalizePermission(input) {
   return { level, companyIds };
 }
 
+function permissionLevel(value) {
+  const normalized = String(value == null ? '' : value).trim().toLowerCase();
+  if (['2', '2级', '二级', '二级权限', 'level2', 'level 2'].includes(normalized)) return 2;
+  if (['3', '3级', '三级', '三级权限', 'level3', 'level 3'].includes(normalized)) return 3;
+  return 1;
+}
+
+function importPermissionForAdmin(admin, value) {
+  const requested = permissionLevel(value);
+  if (admin && admin.scope === 'hq' && requested >= 2) return { level: 3, companyIds: [] };
+  if (admin && admin.scope === 'company' && requested === 2) {
+    return { level: 2, companyIds: [admin.companyId] };
+  }
+  return { level: 1, companyIds: [] };
+}
+
+function employeePermissionForAdmin(admin, input, fallbackCompanyId) {
+  const level = Number(input && input.level);
+  if (admin && admin.scope === 'company') {
+    return level === 2
+      ? { level: 2, companyIds: [admin.companyId] }
+      : { level: 1, companyIds: [] };
+  }
+  if (level === 2) {
+    const companyIds = Array.isArray(input && input.companyIds) && input.companyIds.length
+      ? input.companyIds
+      : [fallbackCompanyId].filter(Boolean);
+    return normalizePermission({ level: 2, companyIds });
+  }
+  return normalizePermission({ level: level === 3 ? 3 : 1, companyIds: [] });
+}
+
 function effectivePermission(person, root, enabled = defaultPermissionEnabled()) {
   const explicit = person.cardPermission;
   const base = explicit || (enabled && root && root.defaultCardPermission) || { level: 1 };
@@ -103,4 +135,16 @@ function mergePermissions(target, source) {
   return next;
 }
 
-module.exports = { defaultPermissionEnabled, normalizePermission, effectivePermission, canManageCompany, assertManageCompany, canManageTemplate, assertManageTemplate, setPermission, mergePermissions };
+module.exports = {
+  defaultPermissionEnabled,
+  normalizePermission,
+  importPermissionForAdmin,
+  employeePermissionForAdmin,
+  effectivePermission,
+  canManageCompany,
+  assertManageCompany,
+  canManageTemplate,
+  assertManageTemplate,
+  setPermission,
+  mergePermissions,
+};

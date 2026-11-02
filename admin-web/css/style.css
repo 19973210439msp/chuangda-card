@@ -221,15 +221,17 @@ main { min-width: 0; max-width: 1600px; width: 100%; padding: 35px clamp(20px, 3
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 13px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-.cards-table { table-layout: fixed; min-width: 1220px; }
+.cards-table { table-layout: fixed; min-width: 1420px; }
+.cards-table .col-index { width: 4%; }
 .cards-table .col-name { width: 9%; }
-.cards-table .col-company { width: 15%; }
-.cards-table .col-title { width: 9%; }
-.cards-table .col-phone { width: 11%; }
-.cards-table .col-email { width: 14%; }
-.cards-table .col-template { width: 12%; }
-.cards-table .col-status { width: 7%; }
-.cards-table .col-ops { width: 23%; }
+.cards-table .col-company { width: 13%; }
+.cards-table .col-title { width: 8%; }
+.cards-table .col-phone { width: 10%; }
+.cards-table .col-email { width: 12%; }
+.cards-table .col-template { width: 10%; }
+.cards-table .col-permission { width: 11%; }
+.cards-table .col-status { width: 6%; }
+.cards-table .col-ops { width: 17%; }
 .cards-table th, .cards-table td { vertical-align: middle; padding: 10px 9px; }
 .cards-table .cell-clip {
   display: block;
@@ -241,6 +243,12 @@ th, td { text-align: left; padding: 13px 12px; border-bottom: 1px solid var(--li
 .cards-table .ops { overflow: visible; }
 .cards-table .inline-actions { justify-content: flex-start; flex-wrap: nowrap; gap: 6px; white-space: nowrap; }
 .cards-table .inline-actions .btn { flex: none; min-height: 30px; padding-inline: 8px; font-size: 12px; }
+.account-panel + .account-panel { margin-top: 18px; }
+.permission-editor { margin-top: 16px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: #f7f9fc; }
+.permission-companies { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin: 12px 0 0; padding: 12px; border: 1px solid var(--line); }
+.permission-companies legend { padding: 0 6px; color: var(--ink); font-size: 13px; font-weight: 600; }
+.permission-companies label { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 13px; }
+.permission-companies input { width: 16px; height: 16px; margin: 0; }
 th {
   font-size: 12px;
   letter-spacing: 0.06em;
@@ -416,6 +424,7 @@ tbody tr:hover td { background: #f5f8fc; }
 .pv-wv-qr { position: absolute; right: 8%; top: 54%; width: 18%; aspect-ratio: 1; object-fit: contain; background: #fff; }
 .search { display: flex; gap: 8px; }
 .search input { width: 220px; }
+#company-q { width: 180px; }
 .muted { color: var(--muted); font-size: 13px; }
 
 @media (max-width: 800px) {

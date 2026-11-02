@@ -37,6 +37,13 @@ test('imports accept occupation and both legacy title headers', async () => {
   }
 });
 
+test('imports read account permission headers for later administrator-side normalization', async () => {
+  for (const header of ['账户权限', '账号权限', '名片权限', '权限']) {
+    const rows = await rowsFromSpreadsheet(Buffer.from(`姓名,手机号,${header}\n测试员工,13800000000,二级\n`), '.csv');
+    assert.equal(rows[0].permissionLevel, '二级');
+  }
+});
+
 test('docx import reads the first table and Chinese headers', async () => {
   const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
